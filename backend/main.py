@@ -34,9 +34,8 @@ def read_root():
 # --- ENDPOINT 1: BULL MARKET SUPPORT BAND ---
 @app.get("/api/support-band")
 def get_support_band():
-    url = (
-        "https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=5y"
-    )
+    # Upgrade data pipeline query range from 5y to max for comprehensive coverage
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=max"
     headers = {"User-Agent": "Mozilla/5.0"}
 
     try:
@@ -53,17 +52,22 @@ def get_support_band():
         df = df.dropna().copy()
 
         df_weekly = df.resample("W", on="date").last().reset_index()
-        # FIX: Drop empty calendar weeks to keep data continuous
         df_weekly = df_weekly.dropna(subset=["close"]).copy()
 
+        # Calculate moving averages across the extended historical time-series layout
         df_weekly["sma_20"] = df_weekly["close"].rolling(window=20).mean()
         df_weekly["ema_21"] = df_weekly["close"].ewm(span=21, adjust=False).mean()
 
         chart_data = []
         for _, row in df_weekly.iterrows():
+            date_str = (
+                row["date"].strftime("%Y-%m-%d") if not pd.isna(row["date"]) else ""
+            )
+            if not date_str:
+                continue
             chart_data.append(
                 {
-                    "date": row["date"].strftime("%Y-%m-%d"),
+                    "date": date_str,
                     "price": safe_float(row["close"]),
                     "sma20": safe_float(row["sma_20"]),
                     "ema21": safe_float(row["ema_21"]),
