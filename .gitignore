@@ -1,0 +1,14 @@
+# Python environment exclusions
+backend/venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Javascript/Node environment exclusions
+frontend/node_modules/
+frontend/dist/
+.env
+.DS_Store
+
+# Local storage buffers
+*.log
