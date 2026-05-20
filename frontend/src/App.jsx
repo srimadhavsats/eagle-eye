@@ -26,6 +26,7 @@ export default function App() {
   const [timeframe, setTimeframe] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Sidebar toggle state
 
   // High-fidelity state management matrix for line visibility tracking
   const [visibility, setVisibility] = useState({
@@ -134,80 +135,95 @@ export default function App() {
     <div className="h-screen bg-[#070a13] text-slate-100 flex flex-col overflow-hidden">
       {/* Primary Application Controls Header */}
       <header className="h-14 border-b border-slate-800/80 bg-[#0c101f] px-6 flex items-center justify-between shadow-md z-10 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="text-emerald-400">
-            <Eye size={20} strokeWidth={2.5} />
+        <div className="flex items-center gap-4">
+          {/* Sidebar Toggle Button */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors border border-transparent hover:border-slate-700"
+          >
+            <Folder size={16} />
+          </button>
+
+          <div className="flex items-center gap-3">
+            <div className="text-emerald-400">
+              <Eye size={20} strokeWidth={2.5} />
+            </div>
+            <h1 className="text-sm font-black tracking-widest text-white font-mono">
+              EAGLE EYE
+            </h1>
           </div>
-          <h1 className="text-sm font-black tracking-widest text-white font-mono">
-            EAGLE EYE
-          </h1>
         </div>
-        <div>
-          <span className="text-[10px] font-mono px-2.5 py-0.5 bg-slate-950 border border-slate-800 rounded-full text-emerald-400 font-bold tracking-wider">
-            ● SYSTEM ACTIVE
-          </span>
-        </div>
+
+        {/* Branch Indicator */}
+        <span className="text-[10px] font-mono px-2.5 py-0.5 bg-slate-950 border border-slate-800 rounded-full text-emerald-400 font-bold tracking-wider flex items-center gap-1.5">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          MAIN
+        </span>
       </header>
 
       {/* Main Split-Screen Layout Grid */}
       <div className="flex flex-1 overflow-hidden">
         {/* Navigation Sidebar Panel */}
-        <aside className="w-64 bg-[#0a0d1a] border-r border-slate-800/80 p-4 flex flex-col gap-6 overflow-y-auto flex-shrink-0 hidden md:flex">
-          <div className="flex border-b border-slate-800 pb-2 gap-4 text-xs font-bold text-slate-400">
-            <span className="text-emerald-400 border-b border-emerald-400 pb-2 cursor-pointer">
-              Crypto
-            </span>
-            <span className="hover:text-slate-200 cursor-pointer">Macro</span>
-            <span className="hover:text-slate-200 cursor-pointer">TradFi</span>
-          </div>
-
-          <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-              <Star size={10} className="text-amber-400 fill-amber-400" />{" "}
-              FAVORITED INDICES
-            </p>
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={() => setActiveTab("support-band")}
-                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                  activeTab === "support-band"
-                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
-                }`}
-              >
-                Market Support Bands
-              </button>
+        {isSidebarOpen && (
+          <aside className="w-64 bg-[#0a0d1a] border-r border-slate-800/80 p-4 flex flex-col gap-6 overflow-y-auto flex-shrink-0">
+            <div className="flex border-b border-slate-800 pb-2 gap-4 text-xs font-bold text-slate-400">
+              <span className="text-emerald-400 border-b border-emerald-400 pb-2 cursor-pointer">
+                Crypto
+              </span>
+              <span className="hover:text-slate-200 cursor-pointer">Macro</span>
+              <span className="hover:text-slate-200 cursor-pointer">
+                TradFi
+              </span>
             </div>
-          </div>
 
-          <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-              <Folder size={10} /> QUANTITATIVE MODELS
-            </p>
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={() => setActiveTab("log-regression")}
-                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                  activeTab === "log-regression"
-                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
-                }`}
-              >
-                Logarithmic Regression
-              </button>
-              <button
-                onClick={() => setActiveTab("risk-metric")}
-                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                  activeTab === "risk-metric"
-                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-8/30"
-                }`}
-              >
-                Macro Risk Profile (0-1)
-              </button>
+            <div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Star size={10} className="text-amber-400 fill-amber-400" />{" "}
+                FAVORITED INDICES
+              </p>
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => setActiveTab("support-band")}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                    activeTab === "support-band"
+                      ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+                  }`}
+                >
+                  Market Support Bands
+                </button>
+              </div>
             </div>
-          </div>
-        </aside>
+
+            <div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Folder size={10} /> QUANTITATIVE MODELS
+              </p>
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => setActiveTab("log-regression")}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                    activeTab === "log-regression"
+                      ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+                  }`}
+                >
+                  Logarithmic Regression
+                </button>
+                <button
+                  onClick={() => setActiveTab("risk-metric")}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                    activeTab === "risk-metric"
+                      ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+                  }`}
+                >
+                  Macro Risk Profile (0-1)
+                </button>
+              </div>
+            </div>
+          </aside>
+        )}
 
         {/* Dynamic Workspace Container */}
         <main className="flex-1 bg-[#060912] p-6 flex flex-col gap-4 overflow-y-auto min-w-0">
@@ -244,7 +260,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Primary Visualization Canvas Panel */}
           <div className="flex-1 bg-[#0b0e1a] border border-slate-800/90 rounded-2xl p-4 md:p-5 min-h-[450px] flex flex-col justify-between shadow-xl relative overflow-hidden">
             {loading && (
               <div className="absolute inset-0 bg-[#0b0e1a]/95 backdrop-blur-xs flex flex-col items-center justify-center gap-3 z-50">
@@ -327,8 +342,6 @@ export default function App() {
                           name,
                         ]}
                       />
-
-                      {/* --- SUPPORT BANDS VIEW CHANNEL --- */}
                       {activeTab === "support-band" && (
                         <Line
                           type="monotone"
@@ -337,32 +350,8 @@ export default function App() {
                           stroke="#f59e0b"
                           strokeWidth={2}
                           dot={false}
-                          activeDot={{ r: 4 }}
                         />
                       )}
-                      {activeTab === "support-band" && (
-                        <Line
-                          type="monotone"
-                          dataKey="sma20"
-                          name="20-Week SMA"
-                          stroke="#10b981"
-                          strokeWidth={1.5}
-                          dot={false}
-                          strokeDasharray="4 4"
-                        />
-                      )}
-                      {activeTab === "support-band" && (
-                        <Line
-                          type="monotone"
-                          dataKey="ema21"
-                          name="21-Week EMA"
-                          stroke="#3b82f6"
-                          strokeWidth={1.5}
-                          dot={false}
-                        />
-                      )}
-
-                      {/* --- QUANTITATIVE REGRESSION CHANNELS VIEW CHANNEL --- */}
                       {activeTab === "log-regression" &&
                         visibility.bubbleUpper && (
                           <Line
@@ -427,28 +416,23 @@ export default function App() {
                           stroke="#f59e0b"
                           strokeWidth={2.5}
                           dot={false}
-                          activeDot={{ r: 4 }}
                           connectNulls
                         />
                       )}
-
-                      {/* --- RISK PROFILE VIEW CHANNEL --- */}
                       {activeTab === "risk-metric" && (
                         <Line
                           type="monotone"
                           dataKey="risk"
-                          name="Normalized Risk Factor Coefficient"
+                          name="Risk Metric"
                           stroke="#ec4899"
                           strokeWidth={2.5}
                           dot={false}
-                          activeDot={{ r: 5 }}
                         />
                       )}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
 
-                {/* --- CUSTOM INTERACTIVE SEVEN-TIER PANEL Core Dock --- */}
                 {activeTab === "log-regression" && (
                   <div className="flex flex-wrap justify-center items-center gap-2 mt-4 border-t border-slate-800/60 pt-3 flex-shrink-0 z-20">
                     <button
