@@ -17,11 +17,14 @@ import {
   Loader2,
   Folder,
   Star,
+  Calendar,
 } from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("support-band");
   const [chartData, setChartData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
+  const [timeframe, setTimeframe] = useState("ALL"); // Options: '1Y', '3Y', 'ALL'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -41,6 +44,8 @@ export default function App() {
       .then((payload) => {
         if (payload.status === "error") throw new Error(payload.message);
         setChartData(payload.data);
+        setFilteredData(payload.data); // Default to full dataset on initialization
+        setTimeframe("ALL"); // Reset timeframe selector on tab changes
         setLoading(false);
       })
       .catch((err) => {
@@ -48,6 +53,30 @@ export default function App() {
         setLoading(false);
       });
   }, [activeTab]);
+
+  // Handle analytical data partitioning based on selected timeframe boundaries
+  useEffect(() => {
+    if (!chartData || chartData.length === 0) return;
+
+    if (timeframe === "ALL") {
+      setFilteredData(chartData);
+      return;
+    }
+
+    // Compute date cutoffs relative to the newest available data index point
+    const targetedData = [...chartData];
+    const newestPoint = new Date(targetedData[targetedData.length - 1].date);
+    let cutoffDays = timeframe === "1Y" ? 365 : 365 * 3;
+
+    const filtered = targetedData.filter((item) => {
+      const itemDate = new Date(item.date);
+      const differenceInTime = newestPoint.getTime() - itemDate.getTime();
+      const differenceInDays = differenceInTime / (1000 * 3600 * 24);
+      return differenceInDays <= cutoffDays;
+    });
+
+    setFilteredData(filtered);
+  }, [timeframe, chartData]);
 
   // Format raw numeric inputs into standard USD localized string structures
   const formatCurrency = (val) => {
@@ -152,16 +181,39 @@ export default function App() {
 
         {/* Dynamic Workspace Container */}
         <main className="flex-1 bg-[#060912] p-6 flex flex-col gap-4 overflow-y-auto min-w-0">
-          {/* Active Metric Description Block */}
-          <div className="bg-[#0b0e1a] border border-slate-800/60 rounded-xl px-5 py-3 shadow-sm flex flex-col gap-1">
-            <h2 className="text-base font-bold text-white tracking-wide">
-              {getChartTitle()}
-            </h2>
-            <p className="text-[11px] text-slate-400 font-mono">
-              Identifier:{" "}
-              <span className="text-amber-400 font-bold">BTC-USD</span> •
-              Timeframe: <span className="text-slate-300">Weekly Interval</span>
-            </p>
+          {/* Active Metric Description Block and Interactive Filter Row */}
+          <div className="bg-[#0b0e1a] border border-slate-800/60 rounded-xl px-5 py-3 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-white tracking-wide">
+                {getChartTitle()}
+              </h2>
+              <p className="text-[10px] text-slate-400 font-mono">
+                Identifier:{" "}
+                <span className="text-amber-400 font-bold">BTC-USD</span> •
+                Timeframe:{" "}
+                <span className="text-slate-300">Weekly Interval</span>
+              </p>
+            </div>
+
+            {/* Top-Deck Timeframe Control Panel */}
+            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 self-start sm:self-auto">
+              <div className="text-slate-500 px-2">
+                <Calendar size={12} />
+              </div>
+              {["1Y", "3Y", "ALL"].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTimeframe(t)}
+                  className={`px-3 py-1 rounded text-[10px] font-mono font-bold tracking-wider transition-all ${
+                    timeframe === t
+                      ? "bg-emerald-500 text-slate-950 shadow-sm"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Primary Visualization Canvas Panel */}
@@ -192,7 +244,7 @@ export default function App() {
               <div className="w-full h-full min-h-0 min-w-0 flex-1">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
-                    data={chartData}
+                    data={filteredData}
                     margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
                   >
                     <CartesianGrid
