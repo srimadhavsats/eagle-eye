@@ -48,7 +48,6 @@ def get_support_band():
         df["date"] = pd.to_datetime(df["timestamp"], unit="s")
         df = df.dropna().copy()
 
-        # Immediate conversion to weekly intervals to drop sparse historical anomalies
         df_weekly = df.resample("W", on="date").last().reset_index()
         df_weekly = df_weekly.dropna(subset=["close"]).copy()
 
@@ -91,28 +90,31 @@ def get_log_regression():
         df["date"] = pd.to_datetime(df["timestamp"], unit="s")
         df = df.dropna().copy()
 
-        # 1. Clean data sequence on weekly compression scales to eliminate gaps
         df_weekly = df.resample("W", on="date").last().reset_index()
         df_weekly = df_weekly.dropna(subset=["close"]).copy()
-        df_weekly["index_seq"] = df_weekly.index + 1
 
-        # 2. Extract technical parameters on contiguous weekly blocks
+        # Calculate timeline coordinates tracking true weekly intervals elapsed from genesis
+        first_date = df_weekly["date"].min()
+        df_weekly["index_seq"] = ((df_weekly["date"] - first_date).dt.days // 7) + 1
+
+        # Fit technical parameters on clean historical blocks
         log_x = np.log(df_weekly["index_seq"])
         log_y = np.log(df_weekly["close"])
         m, c = np.polyfit(log_x, log_y, 1)
 
-        # 3. Formulate exactly 3 years of future weekly projection points
+        # Append exactly 3 years of future weekly timeframe structures
         last_historical_date = df_weekly["date"].max()
         future_dates = pd.date_range(
             start=last_historical_date + pd.Timedelta(weeks=1), periods=52 * 3, freq="W"
         )
         future_df = pd.DataFrame({"date": future_dates, "close": np.nan})
 
-        # 4. Unify data matrices into an unbroken time-series layout
         extended_df = pd.concat([df_weekly, future_df], ignore_index=True)
-        extended_df["index_seq"] = extended_df.index + 1
 
-        # 5. Populate bands completely across the entire layout matrix
+        # Re-verify layout timeline coordinates tracking forward relative to genesis anchor point
+        extended_df["index_seq"] = ((extended_df["date"] - first_date).dt.days // 7) + 1
+
+        # Extrapolate bands smoothly across history and future projections
         extended_df["fair_value"] = np.exp(c) * (extended_df["index_seq"] ** m)
         extended_df["accumulation_bottom"] = np.exp(c - 0.45) * (
             extended_df["index_seq"] ** m
@@ -160,7 +162,10 @@ def get_risk_metric():
 
         df_weekly = df.resample("W", on="date").last().reset_index()
         df_weekly = df_weekly.dropna(subset=["close"]).copy()
-        df_weekly["index_seq"] = df_weekly.index + 1
+
+        # Maintain identical calendar tracking metrics for data uniformity
+        first_date = df_weekly["date"].min()
+        df_weekly["index_seq"] = ((df_weekly["date"] - first_date).dt.days // 7) + 1
 
         log_x = np.log(df_weekly["index_seq"])
         log_y = np.log(df_weekly["close"])
