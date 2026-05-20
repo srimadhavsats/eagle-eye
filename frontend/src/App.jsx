@@ -21,7 +21,6 @@ export default function App() {
     setLoading(true);
     setError(null);
 
-    // Connect directly to local running FastAPI server channels
     fetch(`http://127.0.0.1:8000/api/${activeTab}`)
       .then((res) => {
         if (!res.ok)
@@ -52,7 +51,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#060913] text-slate-100 flex flex-col">
-      {/* Structural Control Bar Header */}
+      {/* Header */}
       <header className="border-b border-slate-800 bg-[#0b0e1a] px-6 py-4 flex items-center justify-between shadow-xl">
         <div className="flex items-center gap-3">
           <div className="bg-emerald-500 p-2 rounded-xl text-[#060913] shadow-lg shadow-emerald-500/20">
@@ -74,9 +73,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* Primary Dashboard Grid Context */}
+      {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 flex flex-col gap-6">
-        {/* Metric Selection Tabs */}
+        {/* Navigation Tabs */}
         <div className="flex flex-wrap gap-2 bg-[#0b0e1a] p-1.5 rounded-xl border border-slate-800/80 self-start shadow-inner">
           <button
             onClick={() => setActiveTab("support-band")}
@@ -113,8 +112,8 @@ export default function App() {
           </button>
         </div>
 
-        {/* Core Rendering Terminal Box */}
-        <div className="bg-[#0b0e1a] border border-slate-800/90 rounded-2xl p-4 md:p-6 min-h-[520px] flex flex-col justify-between shadow-2xl relative">
+        {/* Chart Window Container */}
+        <div className="bg-[#0b0e1a] border border-slate-800/90 rounded-2xl p-4 md:p-6 h-[520px] flex flex-col justify-between shadow-2xl relative">
           {loading && (
             <div className="absolute inset-0 bg-[#0b0e1a]/95 backdrop-blur-xs flex flex-col items-center justify-center gap-3 z-50">
               <Loader2 className="animate-spin text-emerald-400" size={36} />
@@ -135,7 +134,7 @@ export default function App() {
           )}
 
           {!loading && !error && (
-            <div className="flex-1 w-full h-[460px]">
+            <div className="w-full h-full min-h-0 min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                   data={chartData}
@@ -172,11 +171,11 @@ export default function App() {
                     }}
                     labelStyle={{
                       color: "#64748b",
-                      fontWeight: "bold",
+                      fontBold: true,
                       fontSize: "11px",
                       fontFamily: "monospace",
                     }}
-                    itemStyle={{ fontSize: "13px", paddingPadding: "2px 0" }}
+                    itemStyle={{ fontSize: "13px" }}
                     formatter={(value) => [
                       activeTab === "risk-metric"
                         ? value
@@ -190,19 +189,20 @@ export default function App() {
                     wrapperStyle={{ fontSize: "12px", paddingBottom: "10px" }}
                   />
 
-                  {/* Bull Market Support Alignment Layer */}
-                  {activeTab === "support-band" && [
+                  {/* Flattened conditional rendering rules to bypass Recharts map errors */}
+                  {activeTab === "support-band" && (
                     <Line
-                      key="price"
                       type="monotone"
                       dataKey="price"
                       name="BTC Price"
                       stroke="#f59e0b"
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                       dot={false}
-                    />,
+                      activeDot={{ r: 4 }}
+                    />
+                  )}
+                  {activeTab === "support-band" && (
                     <Line
-                      key="sma20"
                       type="monotone"
                       dataKey="sma20"
                       name="20-Week SMA"
@@ -210,40 +210,42 @@ export default function App() {
                       strokeWidth={1.5}
                       dot={false}
                       strokeDasharray="4 4"
-                    />,
+                    />
+                  )}
+                  {activeTab === "support-band" && (
                     <Line
-                      key="ema21"
                       type="monotone"
                       dataKey="ema21"
                       name="21-Week EMA"
                       stroke="#3b82f6"
                       strokeWidth={1.5}
                       dot={false}
-                    />,
-                  ]}
+                    />
+                  )}
 
-                  {/* Log Linear Regression Banding Enclosure */}
-                  {activeTab === "log-regression" && [
+                  {activeTab === "log-regression" && (
                     <Line
-                      key="price"
                       type="monotone"
                       dataKey="price"
                       name="BTC Price"
                       stroke="#f59e0b"
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                       dot={false}
-                    />,
+                      activeDot={{ r: 4 }}
+                    />
+                  )}
+                  {activeTab === "log-regression" && (
                     <Line
-                      key="upper"
                       type="monotone"
                       dataKey="upper_band"
                       name="Cycle Top Ceiling"
                       stroke="#ef4444"
                       strokeWidth={1.5}
                       dot={false}
-                    />,
+                    />
+                  )}
+                  {activeTab === "log-regression" && (
                     <Line
-                      key="fair"
                       type="monotone"
                       dataKey="fair_value"
                       name="Fair Value Center"
@@ -251,30 +253,30 @@ export default function App() {
                       strokeWidth={1.5}
                       dot={false}
                       strokeDasharray="5 5"
-                    />,
+                    />
+                  )}
+                  {activeTab === "log-regression" && (
                     <Line
-                      key="lower"
                       type="monotone"
                       dataKey="lower_band"
                       name="Accumulation Floor"
                       stroke="#10b981"
                       strokeWidth={1.5}
                       dot={false}
-                    />,
-                  ]}
+                    />
+                  )}
 
-                  {/* 0-1 Normalizing Scale Axis */}
-                  {activeTab === "risk-metric" && [
+                  {activeTab === "risk-metric" && (
                     <Line
-                      key="risk"
                       type="monotone"
                       dataKey="risk"
                       name="Macro Risk Factor (0.0 - 1.0)"
                       stroke="#ec4899"
-                      strokeWidth={2.5}
+                      strokeWidth={3}
                       dot={false}
-                    />,
-                  ]}
+                      activeDot={{ r: 5 }}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
