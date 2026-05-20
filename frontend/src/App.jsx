@@ -63,16 +63,28 @@ export default function App() {
       return;
     }
 
-    // Compute date cutoffs relative to the newest available data index point
     const targetedData = [...chartData];
-    const newestPoint = new Date(targetedData[targetedData.length - 1].date);
-    let cutoffDays = timeframe === "1Y" ? 365 : 365 * 3;
 
+    // Find the latest data point that contains an actual historical spot price
+    const historicalPoints = targetedData.filter((item) => item.price !== null);
+    if (historicalPoints.length === 0) return;
+
+    const latestHistoricalDate = new Date(
+      historicalPoints[historicalPoints.length - 1].date,
+    );
+
+    // Compute the start date cutoff relative to the latest historical point
+    const startDate = new Date(latestHistoricalDate);
+    if (timeframe === "1Y") {
+      startDate.setFullYear(startDate.getFullYear() - 1);
+    } else if (timeframe === "3Y") {
+      startDate.setFullYear(startDate.getFullYear() - 3);
+    }
+
+    // Keep all rows from the start date onward (includes history lookback + future projections)
     const filtered = targetedData.filter((item) => {
       const itemDate = new Date(item.date);
-      const differenceInTime = newestPoint.getTime() - itemDate.getTime();
-      const differenceInDays = differenceInTime / (1000 * 3600 * 24);
-      return differenceInDays <= cutoffDays;
+      return itemDate >= startDate;
     });
 
     setFilteredData(filtered);
@@ -260,7 +272,6 @@ export default function App() {
                       minTickGap={60}
                     />
 
-                    {/* Logarithmic scale engine overrides active dynamically based on data requirement */}
                     <YAxis
                       stroke="#475569"
                       fontSize={10}
