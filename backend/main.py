@@ -80,7 +80,7 @@ def get_support_band():
         return {"status": "error", "message": str(e)}
 
 
-# --- ENDPOINT 2: LOGARITHMIC REGRESSION BANDS ---
+# --- ENDPOINT 2: LOGARITHMIC REGRESSION BANDS WITH FUTURE PROJECTIONS ---
 @app.get("/api/log-regression")
 def get_log_regression():
     url = "https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=max"
@@ -98,28 +98,50 @@ def get_log_regression():
         df = pd.DataFrame({"timestamp": timestamps, "close": closes})
         df["date"] = pd.to_datetime(df["timestamp"], unit="s")
         df = df.dropna().copy()
-
         df = df.sort_values("date").reset_index(drop=True)
         df["index_days"] = df.index + 1
 
+        # 1. Calculate the quantitative regression coefficients strictly on historical data
         log_x = np.log(df["index_days"])
         log_y = np.log(df["close"])
         m, c = np.polyfit(log_x, log_y, 1)
 
-        df["fair_value"] = np.exp(c) * (df["index_days"] ** m)
-        df["accumulation_bottom"] = np.exp(c - 0.45) * (df["index_days"] ** m)
-        df["overvalued_peak"] = np.exp(c + 0.55) * (df["index_days"] ** m)
+        # 2. Mathematical Extension: Generate 3 years of future daily timeline rows
+        last_historical_date = df["date"].max()
+        future_dates = pd.date_range(
+            start=last_historical_date + pd.Timedelta(days=1), periods=365 * 3, freq="D"
+        )
+        future_df = pd.DataFrame({"date": future_dates})
+        future_df["close"] = (
+            np.nan
+        )  # Future price is unknown, leaving as NaN so the line stops
 
-        df_weekly = df.resample("W", on="date").last().reset_index()
-        # FIX: Drop empty calendar weeks to clean up data gaps completely
-        df_weekly = df_weekly.dropna(subset=["close"]).copy()
+        # 3. Concatenate historical data with the empty future matrix
+        extended_df = pd.concat([df, future_df], ignore_index=True)
+        extended_df["index_days"] = (
+            extended_df.index + 1
+        )  # Continue the day count smoothly
+
+        # 4. Extrapolate values across the entire extended timeline using historical coefficients
+        extended_df["fair_value"] = np.exp(c) * (extended_df["index_days"] ** m)
+        extended_df["accumulation_bottom"] = np.exp(c - 0.45) * (
+            extended_df["index_days"] ** m
+        )
+        extended_df["overvalued_peak"] = np.exp(c + 0.55) * (
+            extended_df["index_days"] ** m
+        )
+
+        # 5. Downsample to weekly intervals to keep rendering performant
+        df_weekly = extended_df.resample("W", on="date").last().reset_index()
 
         payload = []
         for _, row in df_weekly.iterrows():
             payload.append(
                 {
                     "date": row["date"].strftime("%Y-%m-%d"),
-                    "price": safe_float(row["close"]),
+                    "price": safe_float(
+                        row["close"]
+                    ),  # Returns null for future rows automatically
                     "fair_value": safe_float(row["fair_value"]),
                     "lower_band": safe_float(row["accumulation_bottom"]),
                     "upper_band": safe_float(row["overvalued_peak"]),
