@@ -9,7 +9,15 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { Eye, TrendingUp, ShieldAlert, BarChart3, Loader2 } from "lucide-react";
+import {
+  Eye,
+  TrendingUp,
+  ShieldAlert,
+  BarChart3,
+  Loader2,
+  Folder,
+  Star,
+} from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("support-band");
@@ -17,6 +25,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Synchronize state and pull quantitative metrics on active tab changes
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -25,7 +34,7 @@ export default function App() {
       .then((res) => {
         if (!res.ok)
           throw new Error(
-            "Could not capture stream from Eagle Eye Radar Engine.",
+            "Network response failed. Target API endpoint unreachable.",
           );
         return res.json();
       })
@@ -40,6 +49,7 @@ export default function App() {
       });
   }, [activeTab]);
 
+  // Format raw numeric inputs into standard USD localized string structures
   const formatCurrency = (val) => {
     if (!val) return "";
     return new Intl.NumberFormat("en-US", {
@@ -49,240 +59,288 @@ export default function App() {
     }).format(val);
   };
 
+  // Generate localized, contextual titles based on the active dataset matrix
+  const getChartTitle = () => {
+    if (activeTab === "support-band")
+      return "Market Analysis: Structural Support Bands";
+    if (activeTab === "log-regression")
+      return "Macro Modeling: Lifetime Logarithmic Regression Channels";
+    return "Risk Assessment: Normalized Quantitative Risk Distribution";
+  };
+
   return (
-    <div className="min-h-screen bg-[#060913] text-slate-100 flex flex-col">
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-[#0b0e1a] px-6 py-4 flex items-center justify-between shadow-xl">
+    <div className="h-screen bg-[#070a13] text-slate-100 flex flex-col overflow-hidden">
+      {/* Primary Application Controls Header */}
+      <header className="h-14 border-b border-slate-800/80 bg-[#0c101f] px-6 flex items-center justify-between shadow-md z-10 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="bg-emerald-500 p-2 rounded-xl text-[#060913] shadow-lg shadow-emerald-500/20">
-            <Eye size={24} strokeWidth={2.5} />
+          <div className="text-emerald-400">
+            <Eye size={20} strokeWidth={2.5} />
           </div>
-          <div>
-            <h1 className="text-lg font-black tracking-wider text-white font-mono">
-              EAGLE EYE
-            </h1>
-            <p className="text-xs text-slate-400 font-medium">
-              Quantitative Crypto Macro Dashboard
-            </p>
-          </div>
+          <h1 className="text-sm font-black tracking-widest text-white font-mono">
+            EAGLE EYE
+          </h1>
         </div>
-        <div className="hidden sm:block">
-          <span className="text-xs font-mono px-3 py-1 bg-slate-950 border border-slate-800 rounded-full text-emerald-400 font-bold tracking-wider">
-            ● RADAR ACTIVE
+        <div>
+          <span className="text-[10px] font-mono px-2.5 py-0.5 bg-slate-950 border border-slate-800 rounded-full text-emerald-400 font-bold tracking-wider">
+            ● SYSTEM ACTIVE
           </span>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 flex flex-col gap-6">
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap gap-2 bg-[#0b0e1a] p-1.5 rounded-xl border border-slate-800/80 self-start shadow-inner">
-          <button
-            onClick={() => setActiveTab("support-band")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              activeTab === "support-band"
-                ? "bg-emerald-500 text-slate-950 font-black shadow-md"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
-            }`}
-          >
-            <TrendingUp size={14} />
-            Support Band
-          </button>
-          <button
-            onClick={() => setActiveTab("log-regression")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              activeTab === "log-regression"
-                ? "bg-emerald-500 text-slate-950 font-black shadow-md"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
-            }`}
-          >
-            <BarChart3 size={14} />
-            Log Regression
-          </button>
-          <button
-            onClick={() => setActiveTab("risk-metric")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              activeTab === "risk-metric"
-                ? "bg-emerald-500 text-slate-950 font-black shadow-md"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
-            }`}
-          >
-            <ShieldAlert size={14} />
-            Risk Metric
-          </button>
-        </div>
+      {/* Main Split-Screen Layout Grid */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Navigation Sidebar Panel */}
+        <aside className="w-64 bg-[#0a0d1a] border-r border-slate-800/80 p-4 flex flex-col gap-6 overflow-y-auto flex-shrink-0 hidden md:flex">
+          {/* Data Domain Selectors */}
+          <div className="flex border-b border-slate-800 pb-2 gap-4 text-xs font-bold text-slate-400">
+            <span className="text-emerald-400 border-b border-emerald-400 pb-2 cursor-pointer">
+              Crypto
+            </span>
+            <span className="hover:text-slate-200 cursor-pointer">Macro</span>
+            <span className="hover:text-slate-200 cursor-pointer">TradFi</span>
+          </div>
 
-        {/* Chart Window Container */}
-        <div className="bg-[#0b0e1a] border border-slate-800/90 rounded-2xl p-4 md:p-6 h-[520px] flex flex-col justify-between shadow-2xl relative">
-          {loading && (
-            <div className="absolute inset-0 bg-[#0b0e1a]/95 backdrop-blur-xs flex flex-col items-center justify-center gap-3 z-50">
-              <Loader2 className="animate-spin text-emerald-400" size={36} />
-              <p className="text-xs font-mono tracking-widest text-emerald-400/80">
-                COMPUTING QUANT DATA MODELS...
-              </p>
+          {/* Navigation Category: Core Moving Averages */}
+          <div>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <Star size={10} className="text-amber-400 fill-amber-400" />{" "}
+              FAVORITED INDICES
+            </p>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => setActiveTab("support-band")}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                  activeTab === "support-band"
+                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+                }`}
+              >
+                Market Support Bands
+              </button>
             </div>
-          )}
+          </div>
 
-          {error && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border border-dashed border-red-900/50 bg-red-950/5 rounded-xl m-4">
-              <ShieldAlert className="text-red-500 mb-2" size={40} />
-              <h3 className="text-sm font-bold uppercase tracking-wider text-red-200">
-                Local Data Link Broken
-              </h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm">{error}</p>
+          {/* Navigation Category: Predictive Analytics */}
+          <div>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <Folder size={10} /> QUANTITATIVE MODELS
+            </p>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => setActiveTab("log-regression")}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                  activeTab === "log-regression"
+                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+                }`}
+              >
+                Logarithmic Regression
+              </button>
+              <button
+                onClick={() => setActiveTab("risk-metric")}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                  activeTab === "risk-metric"
+                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+                }`}
+              >
+                Macro Risk Profile (0-1)
+              </button>
             </div>
-          )}
+          </div>
+        </aside>
 
-          {!loading && !error && (
-            <div className="w-full h-full min-h-0 min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={chartData}
-                  margin={{ top: 10, right: 10, left: 10, bottom: 5 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#1e293b"
-                    opacity={0.3}
-                  />
-                  <XAxis
-                    dataKey="date"
-                    stroke="#475569"
-                    tickMargin={10}
-                    fontSize={11}
-                    minTickGap={50}
-                  />
-                  <YAxis
-                    stroke="#475569"
-                    fontSize={11}
-                    scale={activeTab === "log-regression" ? "log" : "linear"}
-                    domain={["auto", "auto"]}
-                    tickFormatter={
-                      activeTab === "risk-metric"
-                        ? (v) => v.toFixed(2)
-                        : formatCurrency
-                    }
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#090d16",
-                      borderColor: "#1e293b",
-                      borderRadius: "12px",
-                    }}
-                    labelStyle={{
-                      color: "#64748b",
-                      fontBold: true,
-                      fontSize: "11px",
-                      fontFamily: "monospace",
-                    }}
-                    itemStyle={{ fontSize: "13px" }}
-                    formatter={(value) => [
-                      activeTab === "risk-metric"
-                        ? value
-                        : formatCurrency(value),
-                    ]}
-                  />
-                  <Legend
-                    verticalAlign="top"
-                    height={40}
-                    iconType="circle"
-                    wrapperStyle={{ fontSize: "12px", paddingBottom: "10px" }}
-                  />
+        {/* Dynamic Workspace Container */}
+        <main className="flex-1 bg-[#060912] p-6 flex flex-col gap-4 overflow-y-auto min-w-0">
+          {/* Active Metric Description Block */}
+          <div className="bg-[#0b0e1a] border border-slate-800/60 rounded-xl px-5 py-3 shadow-sm flex flex-col gap-1">
+            <h2 className="text-base font-bold text-white tracking-wide">
+              {getChartTitle()}
+            </h2>
+            <p className="text-[11px] text-slate-400 font-mono">
+              Identifier:{" "}
+              <span className="text-amber-400 font-bold">BTC-USD</span> •
+              Timeframe: <span className="text-slate-300">Weekly Interval</span>
+            </p>
+          </div>
 
-                  {/* Flattened conditional rendering rules to bypass Recharts map errors */}
-                  {activeTab === "support-band" && (
-                    <Line
-                      type="monotone"
-                      dataKey="price"
-                      name="BTC Price"
-                      stroke="#f59e0b"
-                      strokeWidth={2.5}
-                      dot={false}
-                      activeDot={{ r: 4 }}
-                    />
-                  )}
-                  {activeTab === "support-band" && (
-                    <Line
-                      type="monotone"
-                      dataKey="sma20"
-                      name="20-Week SMA"
-                      stroke="#10b981"
-                      strokeWidth={1.5}
-                      dot={false}
-                      strokeDasharray="4 4"
-                    />
-                  )}
-                  {activeTab === "support-band" && (
-                    <Line
-                      type="monotone"
-                      dataKey="ema21"
-                      name="21-Week EMA"
-                      stroke="#3b82f6"
-                      strokeWidth={1.5}
-                      dot={false}
-                    />
-                  )}
+          {/* Primary Visualization Canvas Panel */}
+          <div className="flex-1 bg-[#0b0e1a] border border-slate-800/90 rounded-2xl p-4 md:p-5 min-h-[450px] flex flex-col justify-between shadow-xl relative">
+            {/* Asynchronous Network Activity Overlay */}
+            {loading && (
+              <div className="absolute inset-0 bg-[#0b0e1a]/95 backdrop-blur-xs flex flex-col items-center justify-center gap-3 z-50">
+                <Loader2 className="animate-spin text-emerald-400" size={32} />
+                <p className="text-[10px] font-mono tracking-widest text-emerald-400/80">
+                  RECALIBRATING MATHEMATICAL FRAMEWORKS...
+                </p>
+              </div>
+            )}
 
-                  {activeTab === "log-regression" && (
-                    <Line
-                      type="monotone"
-                      dataKey="price"
-                      name="BTC Price"
-                      stroke="#f59e0b"
-                      strokeWidth={2.5}
-                      dot={false}
-                      activeDot={{ r: 4 }}
+            {/* Runtime Exception UI Fallback */}
+            {error && (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border border-dashed border-red-900/40 bg-red-950/5 rounded-xl m-4">
+                <ShieldAlert className="text-red-500 mb-2" size={36} />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-red-200">
+                  Data Synchronization Error
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-sm">{error}</p>
+              </div>
+            )}
+
+            {/* Active Chart Engine Interface */}
+            {!loading && !error && (
+              <div className="w-full h-full min-h-0 min-w-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={chartData}
+                    margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#1e293b"
+                      opacity={0.25}
                     />
-                  )}
-                  {activeTab === "log-regression" && (
-                    <Line
-                      type="monotone"
-                      dataKey="upper_band"
-                      name="Cycle Top Ceiling"
-                      stroke="#ef4444"
-                      strokeWidth={1.5}
-                      dot={false}
-                    />
-                  )}
-                  {activeTab === "log-regression" && (
-                    <Line
-                      type="monotone"
-                      dataKey="fair_value"
-                      name="Fair Value Center"
+                    <XAxis
+                      dataKey="date"
                       stroke="#475569"
-                      strokeWidth={1.5}
-                      dot={false}
-                      strokeDasharray="5 5"
+                      tickMargin={10}
+                      fontSize={10}
+                      minTickGap={60}
                     />
-                  )}
-                  {activeTab === "log-regression" && (
-                    <Line
-                      type="monotone"
-                      dataKey="lower_band"
-                      name="Accumulation Floor"
-                      stroke="#10b981"
-                      strokeWidth={1.5}
-                      dot={false}
-                    />
-                  )}
 
-                  {activeTab === "risk-metric" && (
-                    <Line
-                      type="monotone"
-                      dataKey="risk"
-                      name="Macro Risk Factor (0.0 - 1.0)"
-                      stroke="#ec4899"
-                      strokeWidth={3}
-                      dot={false}
-                      activeDot={{ r: 5 }}
+                    {/* Logarithmic scale engine overrides active dynamically based on data requirement */}
+                    <YAxis
+                      stroke="#475569"
+                      fontSize={10}
+                      scale={activeTab === "log-regression" ? "log" : "linear"}
+                      domain={["auto", "auto"]}
+                      tickFormatter={
+                        activeTab === "risk-metric"
+                          ? (v) => v.toFixed(2)
+                          : formatCurrency
+                      }
                     />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      </main>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#090d16",
+                        borderColor: "#1e293b",
+                        borderRadius: "12px",
+                      }}
+                      labelStyle={{
+                        color: "#64748b",
+                        fontWeight: "bold",
+                        fontSize: "11px",
+                        fontFamily: "monospace",
+                      }}
+                      itemStyle={{ fontSize: "12px", padding: "2px 0" }}
+                      formatter={(value) => [
+                        activeTab === "risk-metric"
+                          ? value
+                          : formatCurrency(value),
+                      ]}
+                    />
+                    <Legend
+                      verticalAlign="top"
+                      height={36}
+                      iconType="circle"
+                      wrapperStyle={{ fontSize: "11px", paddingBottom: "10px" }}
+                    />
+
+                    {/* Technical Indicator Line Rendering Pipelines */}
+                    {activeTab === "support-band" && (
+                      <Line
+                        type="monotone"
+                        dataKey="price"
+                        name="Spot Price"
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 4 }}
+                      />
+                    )}
+                    {activeTab === "support-band" && (
+                      <Line
+                        type="monotone"
+                        dataKey="sma20"
+                        name="20-Week SMA"
+                        stroke="#10b981"
+                        strokeWidth={1.5}
+                        dot={false}
+                        strokeDasharray="4 4"
+                      />
+                    )}
+                    {activeTab === "support-band" && (
+                      <Line
+                        type="monotone"
+                        dataKey="ema21"
+                        name="21-Week EMA"
+                        stroke="#3b82f6"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
+                    )}
+
+                    {activeTab === "log-regression" && (
+                      <Line
+                        type="monotone"
+                        dataKey="price"
+                        name="Spot Price"
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 4 }}
+                      />
+                    )}
+                    {activeTab === "log-regression" && (
+                      <Line
+                        type="monotone"
+                        dataKey="upper_band"
+                        name="Channel Resistance Upper Boundary"
+                        stroke="#ef4444"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
+                    )}
+                    {activeTab === "log-regression" && (
+                      <Line
+                        type="monotone"
+                        dataKey="fair_value"
+                        name="Regression Midpoint Value"
+                        stroke="#475569"
+                        strokeWidth={1.5}
+                        dot={false}
+                        strokeDasharray="5 5"
+                      />
+                    )}
+                    {activeTab === "log-regression" && (
+                      <Line
+                        type="monotone"
+                        dataKey="lower_band"
+                        name="Channel Support Lower Boundary"
+                        stroke="#10b981"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
+                    )}
+
+                    {activeTab === "risk-metric" && (
+                      <Line
+                        type="monotone"
+                        dataKey="risk"
+                        name="Normalized Risk Factor Coefficient"
+                        stroke="#ec4899"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5 }}
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
