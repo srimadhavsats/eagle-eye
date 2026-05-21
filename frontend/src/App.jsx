@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Brush,
 } from "recharts";
 import {
   Eye,
@@ -15,6 +16,7 @@ import {
   Folder,
   Star,
   Calendar,
+  RefreshCw,
 } from "lucide-react";
 
 export default function App() {
@@ -25,8 +27,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [chartKey, setChartKey] = useState(0); // Key used to force reset
 
-  // Visibility matrix for regression bands
   const [visibility, setVisibility] = useState({
     price: true,
     bubbleUpper: true,
@@ -77,9 +79,9 @@ export default function App() {
       currency: "USD",
       maximumFractionDigits: 0,
     }).format(val);
-
   const toggleLine = (key) =>
     setVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
+  const resetZoom = () => setChartKey((prev) => prev + 1); // Trigger re-render
 
   const handleToggleAll = () => {
     const anyVisible = Object.values(visibility).some((v) => v);
@@ -135,9 +137,17 @@ export default function App() {
               </div>
             )}
 
+            {/* Reset Zoom Button */}
+            <button
+              onClick={resetZoom}
+              className="absolute top-4 right-4 z-40 flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] px-3 py-1.5 rounded-full border border-slate-700 transition-all"
+            >
+              <RefreshCw size={12} /> Reset Zoom
+            </button>
+
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                key={activeTab}
+                key={`${activeTab}-${chartKey}`}
                 data={filteredData}
                 margin={{ top: 20, right: 30, bottom: 20 }}
               >
@@ -146,8 +156,6 @@ export default function App() {
                   stroke="#1e293b"
                   vertical={false}
                 />
-
-                {/* Updated XAxis to show only the year */}
                 <XAxis
                   dataKey="date"
                   stroke="#475569"
@@ -156,7 +164,6 @@ export default function App() {
                   tickLine={false}
                   tickFormatter={(val) => val.split("-")[0]}
                 />
-
                 <YAxis
                   stroke="#475569"
                   fontSize={10}
@@ -241,6 +248,7 @@ export default function App() {
                         name="Non-Bubble Fit"
                         stroke="#10b981"
                         strokeWidth={2}
+                        strokeDasharray="4 4"
                         dot={false}
                         connectNulls
                       />
@@ -268,6 +276,14 @@ export default function App() {
                     )}
                   </>
                 )}
+                {/* Drag-to-zoom implementation */}
+                <Brush
+                  dataKey="date"
+                  height={30}
+                  stroke="#475569"
+                  fill="#0b0e1a"
+                  travellerWidth={10}
+                />
               </LineChart>
             </ResponsiveContainer>
 
