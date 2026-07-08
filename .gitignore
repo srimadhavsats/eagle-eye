@@ -3,12 +3,28 @@ backend/venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
 
 # Javascript/Node environment exclusions
 frontend/node_modules/
 frontend/dist/
+frontend/build/
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 .DS_Store
 
 # Local storage buffers
 *.log
+
+# Editor configurations
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
