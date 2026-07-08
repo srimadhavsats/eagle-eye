@@ -1,10 +1,13 @@
-name: CI Workflow
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+
+permissions:
+  contents: write
 
 jobs:
   backend-security-scan:
@@ -27,7 +30,7 @@ jobs:
         run: |
           bandit -r backend/ -x backend/venv/
 
-  frontend-build-check:
+  frontend-build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -49,3 +52,10 @@ jobs:
         run: |
           cd frontend
           npm run build
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: frontend/dist
+          branch: gh-pages

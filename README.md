@@ -1,16 +1,44 @@
-﻿# Eagle Eye - Quantitative Crypto Dashboard
+# Eagle Eye - Macro Crypto Intelligence Hub
 
-An asset-agnostic, full-stack quantitative analytics platform designed to calculate, visualize, and extrapolate long-term mathematical macroeconomic trends. The architecture utilizes a high-performance Python backend to manage time-series data pipelines and feeds an interactive, responsive React interface for real-time data simulation.
+An advanced quantitative analytics platform designed to model, visualize, and forecast long-term macroeconomic trends for digital assets. The architecture couples a high-performance Python FastAPI engine with a responsive, glassmorphic React interface to deliver interactive charting and indicators.
 
-## 🪐 Key Engineering Features
+---
 
-* **Hybrid Seed Data Pipeline:** Employs a local static cache model paired with a live differential patching engine to optimize data retrieval speeds, ensure 99.9% pipeline uptime, and eliminate runtime dependencies on external third-party servers.
-* **Chronological Index Alignment:** Implements a deterministic, calendar-based delta tracking index system (`date - genesis_anchor`) to guarantee perfect multi-matrix synchronization across historical records and predictive arrays.
-* **Dynamic Simulation Client:** Features interactive query parameters allowing end-users to dynamically adjust lookback lengths and timeframe projections, forcing the regression engine to re-extrapolate coordinates on the fly.
-* **System Observability Layer:** Integrates an algorithmic system health endpoint monitoring database constraints, storage footings, network latency, and delta patch integrity.
+## 🛠️ Key Engineering Features
 
-## 🛠️ Technology Stack
+* **Top-Tier Diagnostic Panel**: Displays real-time calculations from the latest daily sync—spot price, Bull Market Support Band status (`SUPPORT HELD` / `BEARISH REGIME`), quantitative risk level, and log regression channel position.
+* **Composed Risk Metric Overlay**: Renders spot price curves color-coded by macro risk alongside a secondary Y-axis area chart illustrating normalized risk metrics (0.00 to 1.00) using custom gradient shading.
+* **Bull Market Support Band**: Dynamic weekly averages plotting the 20-Week Simple Moving Average (SMA) and 21-Week Exponential Moving Average (EMA) to identify cycle support thresholds.
+* **Logarithmic Regression Bands**: Extrapolates standard deviation bands from genesis to model diminishing returns and volatility decay over multiple cycles, featuring lookahead projection controls.
+* **Automated CI/CD Deployment**: Complete GitHub Actions workflow that executes security audits on the backend using `bandit` and compiles and deploys the frontend bundle directly to GitHub Pages.
 
-* **Backend Engine:** Python, FastAPI, Pandas, NumPy, Uvicorn
-* **Frontend Interface:** React (Vite), Tailwind CSS, Recharts, Lucide Icons
-* **Data Sources:** Unthrottled financial time-series endpoints.
+---
+
+## 💻 Technology Stack
+
+* **Backend Engine**: Python, FastAPI, Pandas, NumPy, Uvicorn, Bandit (security scanning)
+* **Frontend Interface**: React, Vite, Tailwind CSS, Recharts, Lucide Icons, Plus Jakarta Sans & JetBrains Mono typography
+* **Data Sources**: Public time-series APIs (Yahoo Finance and Blockchain.com)
+
+---
+
+## 🚀 Local Installation & Execution
+
+### 1. Start the Backend
+Navigate to the `backend/` directory, set up the virtual environment, install dependencies, and start the development server:
+```bash
+cd backend
+# Create virtual environment if needed: python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+python -m uvicorn main:app --port 8000 --reload
+```
+
+### 2. Start the Frontend
+Navigate to the `frontend/` directory, install Node modules, and launch the Vite development server:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Open `http://127.0.0.1:5173/eagle-eye/` in your browser.

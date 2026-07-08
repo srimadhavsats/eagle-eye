@@ -50,7 +50,7 @@ def get_synchronized_dataset():
         url = "https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=7d"
         headers = {"User-Agent": "Mozilla/5.0"}
         try:
-            res = requests.get(url, headers=headers)
+            res = requests.get(url, headers=headers, timeout=10)
             res.raise_for_status()
             json_data = res.json()["chart"]["result"][0]
             timestamps = json_data["timestamp"]

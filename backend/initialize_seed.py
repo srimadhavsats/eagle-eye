@@ -28,7 +28,7 @@ def download_historical_seed():
 
     try:
         # Fetching early data directly from the network indexer
-        bc_res = requests.get(blockchain_url, headers=headers)
+        bc_res = requests.get(blockchain_url, headers=headers, timeout=15)
         bc_res.raise_for_status()
         bc_values = bc_res.json().get("values", [])
 
@@ -58,7 +58,7 @@ def download_historical_seed():
         period2 = int(time.time())
         yahoo_url = f"https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?period1={period1}&period2={period2}&interval=1d"
 
-        y_res = requests.get(yahoo_url, headers=headers)
+        y_res = requests.get(yahoo_url, headers=headers, timeout=15)
         y_res.raise_for_status()
         json_data = y_res.json()["chart"]["result"][0]
 
