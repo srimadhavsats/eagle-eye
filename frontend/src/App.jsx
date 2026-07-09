@@ -543,7 +543,7 @@ export default function App() {
     const endTimestamp = new Date(filteredData[filteredData.length - 1].date);
     const totalDaysVisible = (endTimestamp - startTimestamp) / (1000 * 3600 * 24);
 
-    if (totalDaysVisible > 730) {
+    if (totalDaysVisible > 1460) {
       return yearString;
     } else if (totalDaysVisible > 90) {
       const simplifiedYear = yearString.slice(2);
