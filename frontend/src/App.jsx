@@ -522,45 +522,33 @@ export default function App() {
   const formatXAxis = (tickItem) => {
     if (!filteredData || filteredData.length === 0 || !tickItem) return tickItem;
 
-    const startTimestamp = new Date(filteredData[0].date);
-    const endTimestamp = new Date(filteredData[filteredData.length - 1].date);
-    const totalDaysVisible = (endTimestamp - startTimestamp) / (1000 * 3600 * 24);
-
     const parsedDate = new Date(tickItem);
+    if (isNaN(parsedDate.getTime())) return tickItem;
+
     const yearString = tickItem.split("-")[0];
     const months = [
       "Jan", "Feb", "Mar", "Apr", "May", "Jun",
       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
     ];
     const currentMonthLabel = months[parsedDate.getMonth()];
-    const isFirstPoint = filteredData[0].date === tickItem;
 
     if (showHalvingLines) {
-      const isAnyHalvingVisible = halvingDates.some(hd => filteredData.some(d => d.date === hd.date));
-      if (isAnyHalvingVisible) {
-        const halvingMatch = halvingDates.find(hd => hd.date === tickItem);
-        if (halvingMatch) {
-          return halvingMatch.year;
-        }
-        return "";
+      const halvingMatch = halvingDates.find(hd => hd.date === tickItem);
+      if (halvingMatch) {
+        return `${halvingMatch.year} Halv.`;
       }
     }
 
+    const startTimestamp = new Date(filteredData[0].date);
+    const endTimestamp = new Date(filteredData[filteredData.length - 1].date);
+    const totalDaysVisible = (endTimestamp - startTimestamp) / (1000 * 3600 * 24);
+
     if (totalDaysVisible > 730) {
-      // Only show the year at the start of the year (January) or the very first point
-      if ((parsedDate.getMonth() === 0 && parsedDate.getDate() <= 7) || isFirstPoint) {
-        return yearString;
-      }
-      return "";
+      return yearString;
     } else if (totalDaysVisible > 90) {
-      // Only show month-year at the start of the month or the very first point
-      if (parsedDate.getDate() <= 7 || isFirstPoint) {
-        const simplifiedYear = yearString.slice(2);
-        return `${currentMonthLabel} '${simplifiedYear}`;
-      }
-      return "";
+      const simplifiedYear = yearString.slice(2);
+      return `${currentMonthLabel} '${simplifiedYear}`;
     } else {
-      // Show day-month for every point
       const calendarDay = parsedDate.getDate();
       return `${calendarDay} ${currentMonthLabel}`;
     }
@@ -840,6 +828,16 @@ export default function App() {
   const latestGoldObj = useMemo(() => goldData.length > 0 ? goldData[goldData.length - 1] : null, [goldData]);
 
   const currentThemeColors = chartColors[theme] || chartColors.dark;
+
+  const activeXAxisTicks = useMemo(() => {
+    if (!showHalvingLines || !filteredData || filteredData.length === 0) return undefined;
+    const start = filteredData[0].date;
+    const end = filteredData[filteredData.length - 1].date;
+    const visibleHalvings = halvingDates
+      .map((hd) => hd.date)
+      .filter((date) => date >= start && date <= end);
+    return visibleHalvings.length > 0 ? visibleHalvings : undefined;
+  }, [showHalvingLines, filteredData]);
 
   return (
     <div className={`h-screen flex flex-col overflow-hidden theme-bg-primary theme-text-primary transition-colors duration-300 ${theme === "light" ? "theme-light" : theme === "cyberpunk" ? "theme-cyberpunk" : ""}`}>
@@ -1401,7 +1399,7 @@ export default function App() {
             </div>
           ) : (
             /* Chart Canvas Container */
-            <div className="flex-grow theme-bg-card border theme-border rounded-2xl p-4 md:p-5 min-h-[450px] flex flex-col justify-between backdrop-blur-md shadow-xl relative overflow-hidden transition-all duration-300">
+            <div className="flex-grow theme-bg-card border theme-border rounded-2xl p-4 md:p-5 min-h-fit flex flex-col justify-between backdrop-blur-md shadow-xl relative overflow-hidden transition-all duration-300">
               {loading && (
                 <div className="absolute inset-0 bg-[#060913]/90 theme-bg-primary/90 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-50">
                   <Loader2 className="animate-spin theme-accent" size={32} />
@@ -1510,7 +1508,7 @@ export default function App() {
                   </div>
 
                   {/* Chart Container */}
-                  <div className="flex-grow min-h-[300px] md:min-h-[450px] w-full relative">
+                  <div className="flex-grow min-h-[300px] md:min-h-[420px] w-full relative">
                     <ResponsiveContainer width="100%" height="100%">
                       {activeTab === "risk-metric" ? (
                         <ComposedChart
@@ -1536,6 +1534,8 @@ export default function App() {
                             axisLine={false}
                             tickLine={false}
                             tickFormatter={formatXAxis}
+                            minTickGap={45}
+                            ticks={activeXAxisTicks}
                           />
                           <YAxis
                             yAxisId="price"
@@ -1647,6 +1647,8 @@ export default function App() {
                             axisLine={false}
                             tickLine={false}
                             tickFormatter={formatXAxis}
+                            minTickGap={45}
+                            ticks={activeXAxisTicks}
                           />
                           <YAxis
                             yAxisId="main"
