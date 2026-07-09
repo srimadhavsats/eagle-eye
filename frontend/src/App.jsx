@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -8,6 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceArea,
+  ReferenceLine,
   ComposedChart,
   Area,
 } from "recharts";
@@ -347,6 +348,14 @@ const chartColors = {
   }
 };
 
+const halvingDates = [
+  { date: "2012-11-25", label: "2012 Halving", year: "2012" },
+  { date: "2016-07-10", label: "2016 Halving", year: "2016" },
+  { date: "2020-05-10", label: "2020 Halving", year: "2020" },
+  { date: "2024-04-21", label: "2024 Halving", year: "2024" },
+  { date: "2028-04-16", label: "2028 Halving", year: "2028" }
+];
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("support-band");
   const [activeCategory, setActiveCategory] = useState("crypto");
@@ -354,7 +363,13 @@ export default function App() {
   const [activeZoom, setActiveZoom] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
+  // Responsive mobile states
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
+  
+  // Halving view states
+  const [showHalvingLines, setShowHalvingLines] = useState(false);
 
   // Projection lookahead control
   const [projectionYears, setProjectionYears] = useState(3);
@@ -381,6 +396,28 @@ export default function App() {
     nonBubbleFit: true,
     nonBubbleLower: true,
   });
+
+  // Resize listener for responsive devices
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setIsSidebarOpen(false);
+      } else {
+        setIsSidebarOpen(true);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const handleTabClick = (tabId) => {
+    setActiveTab(tabId);
+    if (window.innerWidth <= 768) {
+      setIsSidebarOpen(false);
+    }
+  };
 
   // 1. Initial Load: Fetch all datasets in parallel
   useEffect(() => {
@@ -481,7 +518,7 @@ export default function App() {
     }).format(val);
   };
 
-  // Dynamic X-axis formatting based on view depth
+  // Dynamic X-axis formatting based on view depth & halving selection
   const formatXAxis = (tickItem) => {
     if (!filteredData || filteredData.length === 0 || !tickItem) return tickItem;
 
@@ -496,15 +533,36 @@ export default function App() {
       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
     ];
     const currentMonthLabel = months[parsedDate.getMonth()];
+    const isFirstPoint = filteredData[0].date === tickItem;
+
+    if (showHalvingLines) {
+      const isAnyHalvingVisible = halvingDates.some(hd => filteredData.some(d => d.date === hd.date));
+      if (isAnyHalvingVisible) {
+        const halvingMatch = halvingDates.find(hd => hd.date === tickItem);
+        if (halvingMatch) {
+          return halvingMatch.year;
+        }
+        return "";
+      }
+    }
 
     if (totalDaysVisible > 730) {
-      return yearString;
+      // Only show the year at the start of the year (January) or the very first point
+      if ((parsedDate.getMonth() === 0 && parsedDate.getDate() <= 7) || isFirstPoint) {
+        return yearString;
+      }
+      return "";
     } else if (totalDaysVisible > 90) {
-      const simplifiedYear = yearString.slice(2);
-      return `${currentMonthLabel} '${simplifiedYear}`;
+      // Only show month-year at the start of the month or the very first point
+      if (parsedDate.getDate() <= 7 || isFirstPoint) {
+        const simplifiedYear = yearString.slice(2);
+        return `${currentMonthLabel} '${simplifiedYear}`;
+      }
+      return "";
     } else {
+      // Show day-month for every point
       const calendarDay = parsedDate.getDate();
-      return `${calendarDay}. ${currentMonthLabel}`;
+      return `${calendarDay} ${currentMonthLabel}`;
     }
   };
 
@@ -608,153 +666,185 @@ export default function App() {
     } else if (cat === "tradfi") {
       setActiveTab("spx");
     }
+    if (window.innerWidth <= 768) {
+      setIsSidebarOpen(false);
+    }
   };
 
   // ----------------------------------------------------
   // Macro Intelligence Calculations for Top Cards
   // ----------------------------------------------------
-  const latestSupport = supportBandCache.length > 0 ? supportBandCache[supportBandCache.length - 1] : null;
-  const latestRisk = riskMetricCache.length > 0 ? riskMetricCache[riskMetricCache.length - 1] : null;
-  const latestRegression = logRegressionCache.length > 0 ? logRegressionCache[logRegressionCache.length - 1] : null;
+  // ----------------------------------------------------
+  // Memoized Macro Intelligence Calculations for Top Cards
+  // ----------------------------------------------------
+  const latestSupport = useMemo(() => supportBandCache.length > 0 ? supportBandCache[supportBandCache.length - 1] : null, [supportBandCache]);
+  const latestRisk = useMemo(() => riskMetricCache.length > 0 ? riskMetricCache[riskMetricCache.length - 1] : null, [riskMetricCache]);
+  const latestRegression = useMemo(() => logRegressionCache.length > 0 ? logRegressionCache[logRegressionCache.length - 1] : null, [logRegressionCache]);
 
-  const currentPrice = latestSupport?.price || latestRisk?.price || 0;
-  const lastSyncDateString = latestSupport?.date
+  const currentPrice = useMemo(() => latestSupport?.price || latestRisk?.price || 0, [latestSupport, latestRisk]);
+  const lastSyncDateString = useMemo(() => latestSupport?.date
     ? new Date(latestSupport.date).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
         year: "numeric",
       })
-    : "N/A";
+    : "N/A", [latestSupport]);
 
   // Card 2: Support Band Calc
   const sma20 = latestSupport?.sma20 || 0;
   const ema21 = latestSupport?.ema21 || 0;
-  let supportStatus = "SYNCHRONIZING";
-  let supportColor = "text-slate-400";
-  let supportBg = "bg-slate-500/10";
-  let supportBorder = "border-slate-800/80";
 
-  if (sma20 && ema21 && currentPrice) {
-    if (currentPrice > sma20 && currentPrice > ema21) {
-      supportStatus = "SUPPORT HELD";
-      supportColor = "text-emerald-400";
-      supportBg = "bg-emerald-500/10";
-      supportBorder = "border-emerald-500/30";
-    } else if (currentPrice < sma20 && currentPrice < ema21) {
-      supportStatus = "BEARISH REGIME";
-      supportColor = "text-rose-400";
-      supportBg = "bg-rose-500/10";
-      supportBorder = "border-rose-500/30";
-    } else {
-      supportStatus = "TESTING BAND";
-      supportColor = "text-amber-400";
-      supportBg = "bg-amber-500/10";
-      supportBorder = "border-amber-500/30";
+  const supportCardDetails = useMemo(() => {
+    let status = "SYNCHRONIZING";
+    let color = "text-slate-400";
+    let bg = "bg-slate-500/10";
+    let border = "border-slate-800/80";
+
+    if (sma20 && ema21 && currentPrice) {
+      if (currentPrice > sma20 && currentPrice > ema21) {
+        status = "SUPPORT HELD";
+        color = "text-emerald-400";
+        bg = "bg-emerald-500/10";
+        border = "border-emerald-500/30";
+      } else if (currentPrice < sma20 && currentPrice < ema21) {
+        status = "BEARISH REGIME";
+        color = "text-rose-400";
+        bg = "bg-rose-500/10";
+        border = "border-rose-500/30";
+      } else {
+        status = "TESTING BAND";
+        color = "text-amber-400";
+        bg = "bg-amber-500/10";
+        border = "border-amber-500/30";
+      }
     }
-  }
+    return { status, color, bg, border };
+  }, [sma20, ema21, currentPrice]);
+
+  const supportStatus = supportCardDetails.status;
+  const supportColor = supportCardDetails.color;
+  const supportBg = supportCardDetails.bg;
+  const supportBorder = supportCardDetails.border;
 
   // Card 3: Risk Metric Calc
   const currentRisk = latestRisk?.risk;
-  let riskLabel = "MODERATE";
-  let riskTextColor = "text-amber-400";
-  let riskBg = "bg-amber-500/10";
-  let riskBorder = "border-amber-500/30";
-  let riskProgressColor = "bg-amber-500";
+  const riskCardDetails = useMemo(() => {
+    let label = "MODERATE";
+    let textColor = "text-amber-400";
+    let bg = "bg-amber-500/10";
+    let border = "border-amber-500/30";
+    let progressColor = "bg-amber-500";
 
-  if (currentRisk !== undefined && currentRisk !== null) {
-    if (currentRisk < 0.2) {
-      riskLabel = "FIRE SALE";
-      riskTextColor = "text-blue-400";
-      riskBg = "bg-blue-500/10";
-      riskBorder = "border-blue-500/30";
-      riskProgressColor = "bg-blue-500";
-    } else if (currentRisk < 0.4) {
-      riskLabel = "ACCUMULATION";
-      riskTextColor = "text-emerald-400";
-      riskBg = "bg-emerald-500/10";
-      riskBorder = "border-emerald-500/30";
-      riskProgressColor = "bg-emerald-500";
-    } else if (currentRisk < 0.6) {
-      riskLabel = "MODERATE RISK";
-      riskTextColor = "text-amber-400";
-      riskBg = "bg-amber-500/10";
-      riskBorder = "border-amber-500/30";
-      riskProgressColor = "bg-amber-500";
-    } else if (currentRisk < 0.8) {
-      riskLabel = "DISTRIBUTION";
-      riskTextColor = "text-orange-400";
-      riskBg = "bg-orange-500/10";
-      riskBorder = "border-orange-500/30";
-      riskProgressColor = "bg-orange-500";
-    } else {
-      riskLabel = "OVERHEATED CYCLE";
-      riskTextColor = "text-rose-400";
-      riskBg = "bg-rose-500/10";
-      riskBorder = "border-rose-500/30";
-      riskProgressColor = "bg-rose-500";
+    if (currentRisk !== undefined && currentRisk !== null) {
+      if (currentRisk < 0.2) {
+        label = "FIRE SALE";
+        textColor = "text-blue-400";
+        bg = "bg-blue-500/10";
+        border = "border-blue-500/30";
+        progressColor = "bg-blue-500";
+      } else if (currentRisk < 0.4) {
+        label = "ACCUMULATION";
+        textColor = "text-emerald-400";
+        bg = "bg-emerald-500/10";
+        border = "border-emerald-500/30";
+        progressColor = "bg-emerald-500";
+      } else if (currentRisk < 0.6) {
+        label = "MODERATE RISK";
+        textColor = "text-amber-400";
+        bg = "bg-amber-500/10";
+        border = "border-amber-500/30";
+        progressColor = "bg-amber-500";
+      } else if (currentRisk < 0.8) {
+        label = "DISTRIBUTION";
+        textColor = "text-orange-400";
+        bg = "bg-orange-500/10";
+        border = "border-orange-500/30";
+        progressColor = "bg-orange-500";
+      } else {
+        label = "OVERHEATED CYCLE";
+        textColor = "text-rose-400";
+        bg = "bg-rose-500/10";
+        border = "border-rose-500/30";
+        progressColor = "bg-rose-500";
+      }
     }
-  }
+    return { label, textColor, bg, border, progressColor };
+  }, [currentRisk]);
+
+  const riskLabel = riskCardDetails.label;
+  const riskTextColor = riskCardDetails.textColor;
+  const riskBg = riskCardDetails.bg;
+  const riskBorder = riskCardDetails.border;
+  const riskProgressColor = riskCardDetails.progressColor;
 
   // Card 4: Regression Channel Position Calc
-  let regLabel = "FAIR VALUE";
-  let regColorClass = "text-emerald-400";
-  let regBgClass = "bg-emerald-500/10";
-  let regBorderClass = "border-emerald-500/30";
+  const regressionCardDetails = useMemo(() => {
+    let label = "FAIR VALUE";
+    let colorClass = "text-emerald-400";
+    let bgClass = "bg-emerald-500/10";
+    let borderClass = "border-emerald-500/30";
 
-  if (latestRegression && currentPrice) {
-    const { nonBubbleLower, nonBubbleFit, nonBubbleUpper, bubbleLower, bubbleUpper } = latestRegression;
-    if (currentPrice < nonBubbleLower) {
-      regLabel = "UNDERVALUED BOTTOM";
-      regColorClass = "text-blue-400";
-      regBgClass = "bg-blue-500/10";
-      regBorderClass = "border-blue-500/30";
-    } else if (currentPrice < nonBubbleFit) {
-      regLabel = "LOWER ACCUMULATION";
-      regColorClass = "text-teal-400";
-      regBgClass = "bg-teal-500/10";
-      regBorderClass = "border-teal-500/30";
-    } else if (currentPrice < nonBubbleUpper) {
-      regLabel = "FAIR VALUE FIT";
-      regColorClass = "text-emerald-400";
-      regBgClass = "bg-emerald-500/10";
-      regBorderClass = "border-emerald-500/30";
-    } else if (currentPrice < bubbleLower) {
-      regLabel = "UPPER EXPANSION";
-      regColorClass = "text-yellow-400";
-      regBgClass = "bg-yellow-500/10";
-      regBorderClass = "border-yellow-500/30";
-    } else if (currentPrice < bubbleUpper) {
-      regLabel = "OVERHEATED RALLY";
-      regColorClass = "text-orange-400";
-      regBgClass = "bg-orange-500/10";
-      regBorderClass = "border-orange-500/30";
-    } else {
-      regLabel = "BUBBLE PEAK";
-      regColorClass = "text-rose-400";
-      regBgClass = "bg-rose-500/10";
-      regBorderClass = "border-rose-500/30";
+    if (latestRegression && currentPrice) {
+      const { nonBubbleLower, nonBubbleFit, nonBubbleUpper, bubbleLower, bubbleUpper } = latestRegression;
+      if (currentPrice < nonBubbleLower) {
+        label = "UNDERVALUED BOTTOM";
+        colorClass = "text-blue-400";
+        bgClass = "bg-blue-500/10";
+        borderClass = "border-blue-500/30";
+      } else if (currentPrice < nonBubbleFit) {
+        label = "LOWER ACCUMULATION";
+        colorClass = "text-teal-400";
+        bgClass = "bg-teal-500/10";
+        borderClass = "border-teal-500/30";
+      } else if (currentPrice < nonBubbleUpper) {
+        label = "FAIR VALUE FIT";
+        colorClass = "text-emerald-400";
+        bgClass = "bg-emerald-500/10";
+        borderClass = "border-emerald-500/30";
+      } else if (currentPrice < bubbleLower) {
+        label = "UPPER EXPANSION";
+        colorClass = "text-yellow-400";
+        bgClass = "bg-yellow-500/10";
+        borderClass = "border-yellow-500/30";
+      } else if (currentPrice < bubbleUpper) {
+        label = "OVERHEATED RALLY";
+        colorClass = "text-orange-400";
+        bgClass = "bg-orange-500/10";
+        borderClass = "border-orange-500/30";
+      } else {
+        label = "BUBBLE PEAK";
+        colorClass = "text-rose-400";
+        bgClass = "bg-rose-500/10";
+        borderClass = "border-rose-500/30";
+      }
     }
-  }
+    return { label, colorClass, bgClass, borderClass };
+  }, [latestRegression, currentPrice]);
 
-  const dxyData = generateMacroData(supportBandCache, "dxy");
-  const latestDxyObj = dxyData.length > 0 ? dxyData[dxyData.length - 1] : null;
-  const cpiData = generateMacroData(supportBandCache, "cpi");
-  const latestCpiObj = cpiData.length > 0 ? cpiData[cpiData.length - 1] : null;
-  const fedData = generateMacroData(supportBandCache, "fed-rate");
-  const latestFedObj = fedData.length > 0 ? fedData[fedData.length - 1] : null;
-  const us10yData = generateMacroData(supportBandCache, "us10y");
-  const latestUs10yObj = us10yData.length > 0 ? us10yData[us10yData.length - 1] : null;
-  const spxData = generateMacroData(supportBandCache, "spx");
-  const latestSpxObj = spxData.length > 0 ? spxData[spxData.length - 1] : null;
-  const goldData = generateMacroData(supportBandCache, "gold");
-  const latestGoldObj = goldData.length > 0 ? goldData[goldData.length - 1] : null;
+  const regLabel = regressionCardDetails.label;
+  const regColorClass = regressionCardDetails.colorClass;
+  const regBgClass = regressionCardDetails.bgClass;
+  const regBorderClass = regressionCardDetails.borderClass;
+
+  const dxyData = useMemo(() => generateMacroData(supportBandCache, "dxy"), [supportBandCache]);
+  const latestDxyObj = useMemo(() => dxyData.length > 0 ? dxyData[dxyData.length - 1] : null, [dxyData]);
+  const cpiData = useMemo(() => generateMacroData(supportBandCache, "cpi"), [supportBandCache]);
+  const latestCpiObj = useMemo(() => cpiData.length > 0 ? cpiData[cpiData.length - 1] : null, [cpiData]);
+  const fedData = useMemo(() => generateMacroData(supportBandCache, "fed-rate"), [supportBandCache]);
+  const latestFedObj = useMemo(() => fedData.length > 0 ? fedData[fedData.length - 1] : null, [fedData]);
+  const us10yData = useMemo(() => generateMacroData(supportBandCache, "us10y"), [supportBandCache]);
+  const latestUs10yObj = useMemo(() => us10yData.length > 0 ? us10yData[us10yData.length - 1] : null, [us10yData]);
+  const spxData = useMemo(() => generateMacroData(supportBandCache, "spx"), [supportBandCache]);
+  const latestSpxObj = useMemo(() => spxData.length > 0 ? spxData[spxData.length - 1] : null, [spxData]);
+  const goldData = useMemo(() => generateMacroData(supportBandCache, "gold"), [supportBandCache]);
+  const latestGoldObj = useMemo(() => goldData.length > 0 ? goldData[goldData.length - 1] : null, [goldData]);
 
   const currentThemeColors = chartColors[theme] || chartColors.dark;
 
   return (
     <div className={`h-screen flex flex-col overflow-hidden theme-bg-primary theme-text-primary transition-colors duration-300 ${theme === "light" ? "theme-light" : theme === "cyberpunk" ? "theme-cyberpunk" : ""}`}>
       {/* Top Banner Header */}
-      <header className="h-16 border-b theme-border theme-bg-panel backdrop-blur-md px-6 flex items-center justify-between shadow-md z-30 flex-shrink-0">
+      <header className="h-16 border-b theme-border theme-bg-panel backdrop-blur-md px-4 md:px-6 flex items-center justify-between shadow-md z-50 flex-shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -826,12 +916,23 @@ export default function App() {
       </header>
 
       {/* Main Split-Screen Layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile Sidebar Overlay */}
+        {isSidebarOpen && isMobile && (
+          <div 
+            className="fixed inset-0 bg-black/60 z-35 top-16"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar Navigation */}
         <aside
           className={`${
-            isSidebarOpen ? "w-64" : "w-0"
-          } theme-bg-secondary border-r theme-border p-4 flex flex-col gap-6 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out`}
+            isSidebarOpen 
+              ? "w-64 translate-x-0 opacity-100" 
+              : "w-0 -translate-x-full opacity-0 pointer-events-none md:pointer-events-auto md:w-0"
+          } fixed md:relative top-16 md:top-0 bottom-0 left-0 z-40 md:z-auto theme-bg-secondary border-r theme-border p-4 flex flex-col gap-6 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out`}
+          style={isMobile ? { height: "calc(100vh - 4rem)" } : {}}
         >
           {isSidebarOpen && (
             <>
@@ -877,7 +978,7 @@ export default function App() {
                       <Star size={10} className="text-amber-400 fill-amber-400" /> FAVORITED INDICES
                     </p>
                     <button
-                      onClick={() => setActiveTab("support-band")}
+                      onClick={() => handleTabClick("support-band")}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                         activeTab === "support-band"
                           ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
@@ -895,7 +996,7 @@ export default function App() {
                     </p>
                     <div className="flex flex-col gap-1.5">
                       <button
-                        onClick={() => setActiveTab("log-regression")}
+                        onClick={() => handleTabClick("log-regression")}
                         className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                           activeTab === "log-regression"
                             ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
@@ -907,7 +1008,7 @@ export default function App() {
                       </button>
 
                       <button
-                        onClick={() => setActiveTab("risk-metric")}
+                        onClick={() => handleTabClick("risk-metric")}
                         className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                           activeTab === "risk-metric"
                             ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
@@ -929,7 +1030,7 @@ export default function App() {
                   </p>
                   <div className="flex flex-col gap-1.5">
                     <button
-                      onClick={() => setActiveTab("dxy")}
+                      onClick={() => handleTabClick("dxy")}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                         activeTab === "dxy"
                           ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
@@ -940,7 +1041,7 @@ export default function App() {
                       US Dollar Index (DXY)
                     </button>
                     <button
-                      onClick={() => setActiveTab("cpi")}
+                      onClick={() => handleTabClick("cpi")}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                         activeTab === "cpi"
                           ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
@@ -951,7 +1052,7 @@ export default function App() {
                       Inflation (CPI YoY %)
                     </button>
                     <button
-                      onClick={() => setActiveTab("fed-rate")}
+                      onClick={() => handleTabClick("fed-rate")}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                         activeTab === "fed-rate"
                           ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
@@ -962,7 +1063,7 @@ export default function App() {
                       Fed Funds Rate Cycle
                     </button>
                     <button
-                      onClick={() => setActiveTab("us10y")}
+                      onClick={() => handleTabClick("us10y")}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                         activeTab === "us10y"
                           ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
@@ -983,7 +1084,7 @@ export default function App() {
                   </p>
                   <div className="flex flex-col gap-1.5">
                     <button
-                      onClick={() => setActiveTab("spx")}
+                      onClick={() => handleTabClick("spx")}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                         activeTab === "spx"
                           ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
@@ -994,7 +1095,7 @@ export default function App() {
                       S&P 500 Equity Index
                     </button>
                     <button
-                      onClick={() => setActiveTab("gold")}
+                      onClick={() => handleTabClick("gold")}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                         activeTab === "gold"
                           ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
@@ -1013,7 +1114,7 @@ export default function App() {
                   <BookOpen size={10} /> DOCUMENTATION
                 </p>
                 <button
-                  onClick={() => setActiveTab("about")}
+                  onClick={() => handleTabClick("about")}
                   className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                     activeTab === "about"
                       ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
@@ -1029,7 +1130,7 @@ export default function App() {
         </aside>
 
         {/* Dynamic Canvas Area */}
-        <main className="flex-grow theme-bg-primary p-6 flex flex-col gap-6 overflow-y-auto min-w-0">
+        <main className="flex-grow theme-bg-primary p-4 md:p-6 flex flex-col gap-6 overflow-y-auto min-w-0">
           
           {/* Top Intelligence Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1389,6 +1490,17 @@ export default function App() {
                       </div>
 
                       <button
+                        onClick={() => setShowHalvingLines(!showHalvingLines)}
+                        className={`flex items-center gap-1.5 text-[9px] font-mono font-bold px-3 py-1.5 rounded-lg border shadow-lg transition-all ${
+                          showHalvingLines 
+                            ? "theme-accent bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-extrabold shadow-[0_0_12px_rgba(16,185,129,0.2)]" 
+                            : "bg-slate-950/80 theme-bg-secondary hover:theme-bg-primary theme-text-primary border-theme-border"
+                        }`}
+                      >
+                        <Zap size={10} /> Halving Years
+                      </button>
+
+                      <button
                         onClick={clearZoomSelection}
                         className="flex items-center gap-1.5 bg-slate-950/80 theme-bg-secondary hover:theme-bg-primary theme-text-primary text-[9px] font-mono font-bold px-3 py-1.5 rounded-lg border theme-border shadow-lg transition-all"
                       >
@@ -1398,7 +1510,7 @@ export default function App() {
                   </div>
 
                   {/* Chart Container */}
-                  <div className="flex-grow min-h-0 w-full relative">
+                  <div className="flex-grow min-h-[300px] md:min-h-[450px] w-full relative">
                     <ResponsiveContainer width="100%" height="100%">
                       {activeTab === "risk-metric" ? (
                         <ComposedChart
@@ -1463,6 +1575,26 @@ export default function App() {
                               return [formatCurrency(value), name];
                             }}
                           />
+                          
+                          {showHalvingLines && halvingDates.map(hd => (
+                            <ReferenceLine
+                              key={hd.date}
+                              yAxisId="price"
+                              x={hd.date}
+                              stroke={theme === "cyberpunk" ? "#d946ef" : theme === "light" ? "#2563eb" : "#10b981"}
+                              strokeDasharray="4 4"
+                              strokeWidth={1.5}
+                              label={{
+                                value: hd.label,
+                                position: "top",
+                                fill: theme === "cyberpunk" ? "#d946ef" : theme === "light" ? "#2563eb" : "#10b981",
+                                fontSize: 9,
+                                fontFamily: "monospace",
+                                fontWeight: "bold"
+                              }}
+                            />
+                          ))}
+
                           {refAreaLeft && refAreaRight && (
                             <ReferenceArea
                               yAxisId="price"
@@ -1493,12 +1625,12 @@ export default function App() {
                             name="Price"
                             stroke={currentThemeColors.text}
                             strokeWidth={1.5}
-                            dot={<CustomRiskDot />}
-                            activeDot={{ r: 5 }}
+                            dot={false}
+                            activeDot={<CustomRiskDot />}
                             connectNulls
                           />
                         </ComposedChart>
-                      ) : (
+                       ) : (
                         <ComposedChart
                           data={filteredData}
                           margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
@@ -1568,6 +1700,25 @@ export default function App() {
                               return [formatMacroValue(value, activeTab), name];
                             }}
                           />
+
+                          {showHalvingLines && halvingDates.map(hd => (
+                            <ReferenceLine
+                              key={hd.date}
+                              yAxisId={activeCategory === "crypto" ? "main" : "btc"}
+                              x={hd.date}
+                              stroke={theme === "cyberpunk" ? "#d946ef" : theme === "light" ? "#2563eb" : "#10b981"}
+                              strokeDasharray="4 4"
+                              strokeWidth={1.5}
+                              label={{
+                                value: hd.label,
+                                position: "top",
+                                fill: theme === "cyberpunk" ? "#d946ef" : theme === "light" ? "#2563eb" : "#10b981",
+                                fontSize: 9,
+                                fontFamily: "monospace",
+                                fontWeight: "bold"
+                              }}
+                            />
+                          ))}
 
                           {refAreaLeft && refAreaRight && (
                             <ReferenceArea
