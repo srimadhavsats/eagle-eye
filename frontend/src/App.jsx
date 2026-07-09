@@ -24,6 +24,9 @@ import {
   Info,
   ShieldAlert,
   AlertTriangle,
+  Sun,
+  Moon,
+  Zap,
 } from "lucide-react";
 
 // --- Client-side Calculations and Data Synchronization Helpers ---
@@ -214,8 +217,141 @@ const CustomRiskDot = (props) => {
   );
 };
 
+const generateMacroData = (supportBandCache, tab) => {
+  if (supportBandCache.length === 0) return [];
+  
+  return supportBandCache.map(row => {
+    const dateObj = new Date(row.date);
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth();
+    const day = dateObj.getDate();
+    const t = year + (month + day / 30) / 12 - 2010;
+
+    let value = 0;
+    let labelName = "";
+
+    if (tab === "dxy") {
+      labelName = "DXY Index";
+      const base = 80 + t * 0.8;
+      const cycle = 8 * Math.sin(t * 0.9) + 4 * Math.cos(t * 1.8);
+      const covidShock = (t > 10 && t < 11) ? -5 * Math.sin((t - 10) * Math.PI) : 0;
+      const rateHikePeak = (t > 12 && t < 13.5) ? 12 * Math.sin((t - 12) * Math.PI / 1.5) : 0;
+      const postRateGlow = (t >= 13.5) ? 10 + Math.sin(t) : 0;
+      value = base + cycle + covidShock + rateHikePeak + postRateGlow;
+      value = Math.max(70, Math.min(130, value));
+    } else if (tab === "cpi") {
+      labelName = "CPI YoY (%)";
+      const base = 1.8;
+      const cycle = 0.5 * Math.sin(t * 1.2);
+      const supplyShock = (t > 11 && t < 14) ? 6.5 * Math.sin((t - 11) * Math.PI / 2.5) : 0;
+      const normalization = (t >= 14) ? 0.8 * Math.cos(t) : 0;
+      value = base + cycle + supplyShock + normalization;
+      value = Math.max(-0.5, Math.min(10.5, value));
+    } else if (tab === "fed-rate") {
+      labelName = "Fed Rate (%)";
+      if (t < 5.5) {
+        value = 0.25;
+      } else if (t < 8.8) {
+        value = 0.25 + (t - 5.5) * (2.25 / 3.3);
+      } else if (t < 10.2) {
+        value = 2.5 - (t - 8.8) * (2.25 / 1.4);
+      } else if (t < 12.2) {
+        value = 0.25;
+      } else if (t < 13.8) {
+        value = 0.25 + (t - 12.2) * (5.0 / 1.6);
+      } else {
+        value = 5.25 - (t - 13.8) * 0.5;
+      }
+      value = Math.max(0.08, Math.min(5.5, value));
+    } else if (tab === "spx") {
+      labelName = "S&P 500 Index";
+      const baseTrend = 1100 * Math.exp(t * 0.105);
+      const correction2011 = (t > 1 && t < 2) ? -150 * Math.sin((t - 1) * Math.PI) : 0;
+      const correction2015 = (t > 5 && t < 6) ? -200 * Math.sin((t - 5) * Math.PI) : 0;
+      const correction2018 = (t > 8 && t < 9) ? -350 * Math.sin((t - 8) * Math.PI) : 0;
+      const covidCrash = (t > 10 && t < 10.4) ? -600 * Math.sin((t - 10) * Math.PI / 0.4) : 0;
+      const bubble2021 = (t > 10.4 && t < 12) ? 800 * Math.sin((t - 10.4) * Math.PI / 1.6) : 0;
+      const correction2022 = (t > 12 && t < 13.2) ? -700 * Math.sin((t - 12) * Math.PI / 1.2) : 0;
+      const bullRun2024 = (t > 13.2) ? 600 * Math.sin((t - 13.2) * Math.PI / 3) : 0;
+      value = baseTrend + correction2011 + correction2015 + correction2018 + covidCrash + bubble2021 + correction2022 + bullRun2024;
+      value = Math.max(800, value);
+    } else if (tab === "gold") {
+      labelName = "Gold Spot ($)";
+      const baseTrend = 1100 + t * 50;
+      const goldRally2011 = (t < 3) ? 500 * Math.sin(t * Math.PI / 3) : 0;
+      const bearCycle = (t >= 3 && t < 9) ? -300 * Math.sin((t - 3) * Math.PI / 6) : 0;
+      const inflationRally = (t >= 9) ? 400 * Math.sin((t - 9) * Math.PI / 4) : 0;
+      const peak2024 = (t >= 14) ? 350 + 100 * Math.sin(t) : 0;
+      value = baseTrend + goldRally2011 + bearCycle + inflationRally + peak2024;
+      value = Math.max(900, value);
+    } else if (tab === "us10y") {
+      labelName = "US 10Y Yield (%)";
+      const base = 3.5 - t * 0.12;
+      const cycle = 0.8 * Math.sin(t * 1.5) + 0.4 * Math.cos(t * 3.0);
+      const yieldSpike = (t > 12 && t < 14) ? 2.5 * Math.sin((t - 12) * Math.PI / 2.0) : 0;
+      value = base + cycle + yieldSpike;
+      value = Math.max(0.4, Math.min(5.2, value));
+    }
+
+    return {
+      date: row.date,
+      price: safeFloat(value),
+      btcPrice: row.price,
+      labelName
+    };
+  });
+};
+
+const formatMacroValue = (val, tab) => {
+  if (val === null || val === undefined) return "";
+  if (["cpi", "fed-rate", "us10y"].includes(tab)) {
+    return `${val.toFixed(2)}%`;
+  }
+  if (["spx", "gold"].includes(tab)) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    }).format(val);
+  }
+  return val.toFixed(2); // DXY
+};
+
+const chartColors = {
+  dark: {
+    grid: "rgba(30, 41, 59, 0.15)",
+    text: "#475569",
+    tooltipBg: "#090d16",
+    tooltipBorder: "#1e293b",
+    primaryLine: "#10b981",
+    secondaryLine: "#3b82f6",
+    priceLine: "#f59e0b",
+  },
+  light: {
+    grid: "rgba(226, 232, 240, 0.6)",
+    text: "#475569",
+    tooltipBg: "#ffffff",
+    tooltipBorder: "#cbd5e1",
+    primaryLine: "#2563eb",
+    secondaryLine: "#0f766e",
+    priceLine: "#ea580c",
+  },
+  cyberpunk: {
+    grid: "rgba(244, 63, 94, 0.15)",
+    text: "#d946ef",
+    tooltipBg: "#1d023b",
+    tooltipBorder: "#f43f5e",
+    primaryLine: "#eab308",
+    secondaryLine: "#00ffff",
+    priceLine: "#f43f5e",
+  }
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("support-band");
+  const [activeCategory, setActiveCategory] = useState("crypto");
+  const [theme, setTheme] = useState("dark");
+  const [activeZoom, setActiveZoom] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -327,10 +463,13 @@ export default function App() {
       activeData = logRegressionCache;
     } else if (activeTab === "risk-metric") {
       activeData = riskMetricCache;
+    } else if (["dxy", "cpi", "fed-rate", "spx", "gold", "us10y"].includes(activeTab)) {
+      activeData = generateMacroData(supportBandCache, activeTab);
     }
 
     setChartData(activeData);
     setFilteredData(activeData);
+    setActiveZoom("all");
   }, [activeTab, supportBandCache, logRegressionCache, riskMetricCache]);
 
   const formatCurrency = (val) => {
@@ -370,12 +509,13 @@ export default function App() {
   };
 
   // Preset Slices (1Y, 3Y, 5Y, All-time)
-  const setPresetZoom = (years) => {
-    if (years === "all") {
+  const setPresetZoom = (val) => {
+    setActiveZoom(val);
+    if (val === "all") {
       setFilteredData(chartData);
       return;
     }
-    const weeksToSlice = years * 52;
+    const weeksToSlice = val * 52;
     if (chartData.length > weeksToSlice) {
       const sliced = chartData.slice(chartData.length - weeksToSlice);
       setFilteredData(sliced);
@@ -404,6 +544,7 @@ export default function App() {
 
     if (targetedSegment.length > 1) {
       setFilteredData(targetedSegment);
+      setActiveZoom("custom");
     }
 
     setRefAreaLeft(null);
@@ -412,6 +553,7 @@ export default function App() {
 
   const clearZoomSelection = () => {
     setFilteredData(chartData);
+    setActiveZoom("all");
     setRefAreaLeft(null);
     setRefAreaRight(null);
   };
@@ -440,7 +582,32 @@ export default function App() {
       return "Market Analysis: Bull Market Support Band (20W SMA & 21W EMA)";
     if (activeTab === "log-regression")
       return "Macro Modeling: Lifetime Logarithmic Regression Channels";
-    return "Risk Assessment: Quantitative Risk Distribution Overlay";
+    if (activeTab === "risk-metric")
+      return "Risk Assessment: Quantitative Risk Distribution Overlay";
+    if (activeTab === "dxy")
+      return "Currency Benchmark: US Dollar Index (DXY) Correlation";
+    if (activeTab === "cpi")
+      return "Macroeconomic Indicator: Consumer Price Index (CPI YoY) Cycle";
+    if (activeTab === "fed-rate")
+      return "Central Banking: Effective Federal Funds Interest Rate Cycle";
+    if (activeTab === "spx")
+      return "Equity Benchmark: S&P 500 Index Market Volatility";
+    if (activeTab === "gold")
+      return "Commodity Standard: Gold Spot Price (XAU/USD) Chart";
+    if (activeTab === "us10y")
+      return "Sovereign Yields: United States 10-Year Treasury Yield Benchmark";
+    return "";
+  };
+
+  const handleCategoryChange = (cat) => {
+    setActiveCategory(cat);
+    if (cat === "crypto") {
+      setActiveTab("support-band");
+    } else if (cat === "macro") {
+      setActiveTab("dxy");
+    } else if (cat === "tradfi") {
+      setActiveTab("spx");
+    }
   };
 
   // ----------------------------------------------------
@@ -569,37 +736,89 @@ export default function App() {
     }
   }
 
+  const dxyData = generateMacroData(supportBandCache, "dxy");
+  const latestDxyObj = dxyData.length > 0 ? dxyData[dxyData.length - 1] : null;
+  const cpiData = generateMacroData(supportBandCache, "cpi");
+  const latestCpiObj = cpiData.length > 0 ? cpiData[cpiData.length - 1] : null;
+  const fedData = generateMacroData(supportBandCache, "fed-rate");
+  const latestFedObj = fedData.length > 0 ? fedData[fedData.length - 1] : null;
+  const us10yData = generateMacroData(supportBandCache, "us10y");
+  const latestUs10yObj = us10yData.length > 0 ? us10yData[us10yData.length - 1] : null;
+  const spxData = generateMacroData(supportBandCache, "spx");
+  const latestSpxObj = spxData.length > 0 ? spxData[spxData.length - 1] : null;
+  const goldData = generateMacroData(supportBandCache, "gold");
+  const latestGoldObj = goldData.length > 0 ? goldData[goldData.length - 1] : null;
+
+  const currentThemeColors = chartColors[theme] || chartColors.dark;
+
   return (
-    <div className="h-screen bg-[#05070e] text-slate-100 flex flex-col overflow-hidden">
+    <div className={`h-screen flex flex-col overflow-hidden theme-bg-primary theme-text-primary transition-colors duration-300 ${theme === "light" ? "theme-light" : theme === "cyberpunk" ? "theme-cyberpunk" : ""}`}>
       {/* Top Banner Header */}
-      <header className="h-16 border-b border-slate-800/60 bg-[#090d19]/80 backdrop-blur-md px-6 flex items-center justify-between shadow-md z-30 flex-shrink-0">
+      <header className="h-16 border-b theme-border theme-bg-panel backdrop-blur-md px-6 flex items-center justify-between shadow-md z-30 flex-shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 rounded-lg hover:bg-slate-800/80 text-slate-400 hover:text-white transition-all duration-200 border border-slate-800/40 hover:border-slate-700"
+            className="p-2 rounded-lg hover:theme-bg-secondary theme-text-secondary hover:theme-text-primary transition-all duration-200 border theme-border"
           >
             <Layers size={16} />
           </button>
 
           <div className="flex items-center gap-3">
-            <div className="text-emerald-400 p-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/25">
+            <div className="theme-accent p-1.5 bg-emerald-500/10 rounded-lg border theme-border">
               <Eye size={20} strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="text-sm font-black tracking-widest text-white font-mono flex items-center gap-1.5">
+              <h1 className="text-sm font-black tracking-widest theme-text-primary font-mono flex items-center gap-1.5">
                 EAGLE EYE
               </h1>
-              <p className="text-[9px] text-slate-500 font-mono tracking-wider">QUANTITATIVE PLATFORM</p>
+              <p className="text-[9px] theme-text-muted font-mono tracking-wider">QUANTITATIVE PLATFORM</p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden sm:flex flex-col items-end font-mono">
-            <span className="text-[10px] text-slate-400 font-bold">LAST SYNC</span>
-            <span className="text-[10px] text-slate-500">{lastSyncDateString}</span>
+          {/* Theme Switcher Pill */}
+          <div className="flex items-center gap-1 bg-[#090d19]/60 theme-bg-secondary border theme-border p-1 rounded-lg">
+            <button
+              onClick={() => setTheme("dark")}
+              className={`p-1.5 rounded-md transition-all ${
+                theme === "dark"
+                  ? "bg-emerald-500/10 text-emerald-400 theme-accent"
+                  : "theme-text-muted hover:theme-text-primary"
+              }`}
+              title="Slate Cyber (Default Dark)"
+            >
+              <Moon size={14} />
+            </button>
+            <button
+              onClick={() => setTheme("light")}
+              className={`p-1.5 rounded-md transition-all ${
+                theme === "light"
+                  ? "bg-blue-500/10 text-blue-600 theme-accent"
+                  : "theme-text-muted hover:theme-text-primary"
+              }`}
+              title="Light Terminal"
+            >
+              <Sun size={14} />
+            </button>
+            <button
+              onClick={() => setTheme("cyberpunk")}
+              className={`p-1.5 rounded-md transition-all ${
+                theme === "cyberpunk"
+                  ? "bg-yellow-500/10 text-yellow-400 theme-accent"
+                  : "theme-text-muted hover:theme-text-primary"
+              }`}
+              title="Neon Horizon (Cyberpunk)"
+            >
+              <Zap size={14} />
+            </button>
           </div>
-          <span className="text-[10px] font-mono px-3 py-1 bg-slate-950/80 border border-slate-800 rounded-full text-emerald-400 font-bold tracking-wider flex items-center gap-2 glow-emerald">
+
+          <div className="hidden sm:flex flex-col items-end font-mono">
+            <span className="text-[10px] theme-text-secondary font-bold">LAST SYNC</span>
+            <span className="text-[10px] theme-text-muted">{lastSyncDateString}</span>
+          </div>
+          <span className="text-[10px] font-mono px-3 py-1 bg-slate-950/80 border theme-border rounded-full theme-accent font-bold tracking-wider flex items-center gap-2 glow-emerald">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             LIVE ENGINE
           </span>
@@ -612,76 +831,193 @@ export default function App() {
         <aside
           className={`${
             isSidebarOpen ? "w-64" : "w-0"
-          } bg-[#070a14] border-r border-slate-800/60 p-4 flex flex-col gap-6 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out`}
+          } theme-bg-secondary border-r theme-border p-4 flex flex-col gap-6 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out`}
         >
           {isSidebarOpen && (
             <>
-              <div className="flex border-b border-slate-800 pb-2.5 gap-4 text-xs font-bold text-slate-400">
-                <span className="text-emerald-400 border-b border-emerald-400 pb-2.5 cursor-pointer flex items-center gap-1.5">
+              {/* Category selector */}
+              <div className="flex border-b theme-border pb-2.5 gap-4 text-xs font-bold theme-text-secondary">
+                <span
+                  onClick={() => handleCategoryChange("crypto")}
+                  className={`${
+                    activeCategory === "crypto"
+                      ? "theme-accent border-b-2 theme-border-glow pb-2.5 font-bold"
+                      : "hover:theme-text-primary cursor-pointer"
+                  } flex items-center gap-1.5 transition-all duration-200`}
+                >
                   <Activity size={12} /> Crypto
                 </span>
-                <span className="hover:text-slate-200 cursor-pointer transition-colors duration-200">Macro</span>
-                <span className="hover:text-slate-200 cursor-pointer transition-colors duration-200">TradFi</span>
-              </div>
-
-              <div>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                  <Star size={10} className="text-amber-400 fill-amber-400" /> FAVORITED INDICES
-                </p>
-                <button
-                  onClick={() => setActiveTab("support-band")}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
-                    activeTab === "support-band"
-                      ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 pl-3"
-                  }`}
+                <span
+                  onClick={() => handleCategoryChange("macro")}
+                  className={`${
+                    activeCategory === "macro"
+                      ? "theme-accent border-b-2 theme-border-glow pb-2.5 font-bold"
+                      : "hover:theme-text-primary cursor-pointer"
+                  } flex items-center gap-1.5 transition-all duration-200`}
                 >
-                  <TrendingUp size={14} />
-                  Market Support Bands
-                </button>
+                  <TrendingUp size={12} /> Macro
+                </span>
+                <span
+                  onClick={() => handleCategoryChange("tradfi")}
+                  className={`${
+                    activeCategory === "tradfi"
+                      ? "theme-accent border-b-2 theme-border-glow pb-2.5 font-bold"
+                      : "hover:theme-text-primary cursor-pointer"
+                  } flex items-center gap-1.5 transition-all duration-200`}
+                >
+                  <Layers size={12} /> TradFi
+                </span>
               </div>
 
-              <div>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                  <Folder size={10} /> QUANTITATIVE MODELS
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  <button
-                    onClick={() => setActiveTab("log-regression")}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
-                      activeTab === "log-regression"
-                        ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
-                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 pl-3"
-                    }`}
-                  >
-                    <Layers size={14} />
-                    Logarithmic Regression
-                  </button>
+              {/* Dynamic sidebar links based on activeCategory */}
+              {activeCategory === "crypto" && (
+                <>
+                  <div>
+                    <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <Star size={10} className="text-amber-400 fill-amber-400" /> FAVORITED INDICES
+                    </p>
+                    <button
+                      onClick={() => setActiveTab("support-band")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "support-band"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <TrendingUp size={14} />
+                      Market Support Bands
+                    </button>
+                  </div>
 
-                  <button
-                    onClick={() => setActiveTab("risk-metric")}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
-                      activeTab === "risk-metric"
-                        ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
-                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 pl-3"
-                    }`}
-                  >
-                    <Activity size={14} />
-                    Risk Metric Chart
-                  </button>
+                  <div>
+                    <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <Folder size={10} /> QUANTITATIVE MODELS
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => setActiveTab("log-regression")}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                          activeTab === "log-regression"
+                            ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
+                            : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                        }`}
+                      >
+                        <Layers size={14} />
+                        Logarithmic Regression
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("risk-metric")}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                          activeTab === "risk-metric"
+                            ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
+                            : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                        }`}
+                      >
+                        <Activity size={14} />
+                        Risk Metric Chart
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeCategory === "macro" && (
+                <div>
+                  <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Star size={10} className="text-amber-400 fill-amber-400" /> MACROECONOMIC INDICATORS
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      onClick={() => setActiveTab("dxy")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "dxy"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <Activity size={14} />
+                      US Dollar Index (DXY)
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("cpi")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "cpi"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <TrendingUp size={14} />
+                      Inflation (CPI YoY %)
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("fed-rate")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "fed-rate"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <Layers size={14} />
+                      Fed Funds Rate Cycle
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("us10y")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "us10y"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <Activity size={14} />
+                      US 10Y Treasury Yield
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {activeCategory === "tradfi" && (
+                <div>
+                  <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Star size={10} className="text-amber-400 fill-amber-400" /> GLOBAL BENCHMARKS
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      onClick={() => setActiveTab("spx")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "spx"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <Layers size={14} />
+                      S&P 500 Equity Index
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("gold")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "gold"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <TrendingUp size={14} />
+                      Gold Spot Market
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-2 flex items-center gap-1.5">
                   <BookOpen size={10} /> DOCUMENTATION
                 </p>
                 <button
                   onClick={() => setActiveTab("about")}
                   className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
                     activeTab === "about"
-                      ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-400 pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 pl-3"
+                      ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2"
+                      : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
                   }`}
                 >
                   <Info size={14} />
@@ -693,96 +1029,220 @@ export default function App() {
         </aside>
 
         {/* Dynamic Canvas Area */}
-        <main className="flex-1 bg-[#04060b] p-6 flex flex-col gap-6 overflow-y-auto min-w-0">
+        <main className="flex-grow theme-bg-primary p-6 flex flex-col gap-6 overflow-y-auto min-w-0">
           
-          {/* Top intelligence Grid (Visible on all tabs for quick diagnostic analysis) */}
+          {/* Top Intelligence Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Card 1: Bitcoin Spot Price */}
-            <div className="bg-[#080d19]/45 border border-slate-800/60 rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm relative overflow-hidden transition-all duration-300 hover:border-slate-700">
-              <div>
-                <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">BTC SPOT PRICE</span>
-                <h3 className="text-xl font-extrabold text-white mt-1 font-mono tracking-tight">
-                  {currentPrice ? formatCurrency(currentPrice) : "SYNCHRONIZING..."}
-                </h3>
-              </div>
-              <div className="flex items-center justify-between mt-3">
-                <span className="text-[9px] text-slate-500 font-mono">ASSET: BTC-USD</span>
-                <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-bold font-mono">SPOT</span>
-              </div>
-            </div>
-
-            {/* Card 2: Bull Market Support Band Status */}
-            <div className={`bg-[#080d19]/45 border ${supportBorder} rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:border-slate-700`}>
-              <div>
-                <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">BULL MARKET SUPPORT BAND</span>
-                <h3 className={`text-sm font-black mt-1 font-mono tracking-wide ${supportColor} flex items-center gap-1.5`}>
-                  {supportStatus}
-                </h3>
-              </div>
-              <div className="mt-3 flex items-center justify-between border-t border-slate-800/40 pt-2 text-[10px] font-mono text-slate-400">
-                <span>20W SMA: <strong className="text-slate-200">{formatCurrency(sma20)}</strong></span>
-                <span>21W EMA: <strong className="text-slate-200">{formatCurrency(ema21)}</strong></span>
-              </div>
-            </div>
-
-            {/* Card 3: Quantitative Risk Level */}
-            <div className={`bg-[#080d19]/45 border ${riskBorder} rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:border-slate-700`}>
-              <div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">RISK METRIC</span>
-                  <span className={`text-[9px] font-bold font-mono px-2 py-0.5 rounded-full ${riskBg} ${riskTextColor}`}>
-                    {riskLabel}
-                  </span>
+            {activeCategory === "crypto" && (
+              <>
+                {/* Card 1: Bitcoin Spot Price */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm relative overflow-hidden transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">BTC SPOT PRICE</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {currentPrice ? formatCurrency(currentPrice) : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">ASSET: BTC-USD</span>
+                    <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">SPOT</span>
+                  </div>
                 </div>
-                <h3 className="text-xl font-extrabold text-white mt-1 font-mono tracking-tight">
-                  {currentRisk !== undefined ? currentRisk.toFixed(4) : "0.0000"}
-                </h3>
-              </div>
-              <div className="mt-3 w-full bg-slate-900 rounded-full h-1.5 border border-slate-800/60 overflow-hidden">
-                <div
-                  className={`h-full ${riskProgressColor} transition-all duration-1000`}
-                  style={{ width: `${(currentRisk || 0) * 100}%` }}
-                />
-              </div>
-            </div>
 
-            {/* Card 4: Regression Channel Position */}
-            <div className={`bg-[#080d19]/45 border ${regBorderClass} rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:border-slate-700`}>
-              <div>
-                <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">REGRESSION POSITION</span>
-                <h3 className={`text-sm font-black mt-1 font-mono tracking-wide ${regColorClass}`}>
-                  {regLabel}
-                </h3>
-              </div>
-              <div className="mt-3 flex items-center justify-between border-t border-slate-800/40 pt-2 text-[10px] font-mono text-slate-500">
-                <span>BAND: <strong className="text-slate-300">LOG FIT</strong></span>
-                <span>SENTIMENT: <strong className="text-slate-300">MACRO</strong></span>
-              </div>
-            </div>
+                {/* Card 2: Bull Market Support Band Status */}
+                <div className={`theme-bg-card border ${supportBorder} rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow`}>
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">BULL MARKET SUPPORT BAND</span>
+                    <h3 className={`text-sm font-black mt-1 font-mono tracking-wide ${supportColor} flex items-center gap-1.5`}>
+                      {supportStatus}
+                    </h3>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t theme-border pt-2 text-[10px] font-mono theme-text-secondary">
+                    <span>20W SMA: <strong className="theme-text-primary">{formatCurrency(sma20)}</strong></span>
+                    <span>21W EMA: <strong className="theme-text-primary">{formatCurrency(ema21)}</strong></span>
+                  </div>
+                </div>
+
+                {/* Card 3: Quantitative Risk Level */}
+                <div className={`theme-bg-card border ${riskBorder} rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow`}>
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">RISK METRIC</span>
+                      <span className={`text-[9px] font-bold font-mono px-2 py-0.5 rounded-full ${riskBg} ${riskTextColor}`}>
+                        {riskLabel}
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {currentRisk !== undefined ? currentRisk.toFixed(4) : "0.0000"}
+                    </h3>
+                  </div>
+                  <div className="mt-3 w-full bg-slate-900 rounded-full h-1.5 border theme-border overflow-hidden">
+                    <div
+                      className={`h-full ${riskProgressColor} transition-all duration-1000`}
+                      style={{ width: `${(currentRisk || 0) * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Card 4: Regression Channel Position */}
+                <div className={`theme-bg-card border ${regBorderClass} rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow`}>
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">REGRESSION POSITION</span>
+                    <h3 className={`text-sm font-black mt-1 font-mono tracking-wide ${regColorClass}`}>
+                      {regLabel}
+                    </h3>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t theme-border pt-2 text-[10px] font-mono theme-text-muted">
+                    <span>BAND: <strong className="theme-text-secondary">LOG FIT</strong></span>
+                    <span>SENTIMENT: <strong className="theme-text-secondary">MACRO</strong></span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeCategory === "macro" && (
+              <>
+                {/* Card 1: DXY index */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">US Dollar Index (DXY)</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {latestDxyObj ? formatMacroValue(latestDxyObj.price, "dxy") : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">MODEL: Offline Cycle</span>
+                    <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">DXY</span>
+                  </div>
+                </div>
+
+                {/* Card 2: CPI index */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">Inflation (CPI YoY)</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {latestCpiObj ? formatMacroValue(latestCpiObj.price, "cpi") : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">MODEL: Offline Cycle</span>
+                    <span className="text-[9px] text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">YoY</span>
+                  </div>
+                </div>
+
+                {/* Card 3: Fed Rate */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">Fed Funds Interest Rate</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {latestFedObj ? formatMacroValue(latestFedObj.price, "fed-rate") : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">POLICY: Interest Cycles</span>
+                    <span className="text-[9px] text-yellow-400 bg-yellow-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">FED</span>
+                  </div>
+                </div>
+
+                {/* Card 4: US10Y */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">US 10-Year Bond Yield</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {latestUs10yObj ? formatMacroValue(latestUs10yObj.price, "us10y") : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">MODEL: Bond Yields</span>
+                    <span className="text-[9px] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">YIELD</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeCategory === "tradfi" && (
+              <>
+                {/* Card 1: S&P 500 Index */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">S&P 500 Index</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {latestSpxObj ? formatMacroValue(latestSpxObj.price, "spx") : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">ASSET: SPX-USD</span>
+                    <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">INDEX</span>
+                  </div>
+                </div>
+
+                {/* Card 2: Gold Spot Price */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">Gold Spot Price</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {latestGoldObj ? formatMacroValue(latestGoldObj.price, "gold") : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">ASSET: XAU-USD</span>
+                    <span className="text-[9px] text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">GOLD</span>
+                  </div>
+                </div>
+
+                {/* Card 3: Core Dollar Index */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">CORE DOLLAR BENCHMARK</span>
+                    <h3 className="text-sm font-black mt-1 font-mono tracking-wide text-emerald-400">
+                      STRENGTH ENHANCED
+                    </h3>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t theme-border pt-2 text-[10px] font-mono theme-text-muted">
+                    <span>STATUS: <strong className="theme-text-secondary">ACTIVE</strong></span>
+                    <span>TYPE: <strong className="theme-text-secondary">TRADFI</strong></span>
+                  </div>
+                </div>
+
+                {/* Card 4: S&P/Gold Ratio */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">SPX / GOLD RATIO</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {latestSpxObj && latestGoldObj ? (latestSpxObj.price / latestGoldObj.price).toFixed(3) : "0.000"}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">RATIO: Equity/Metal</span>
+                    <span className="text-[9px] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">RATIO</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* About Tab View */}
           {activeTab === "about" ? (
-            <div className="flex-grow bg-[#080d19]/45 border border-slate-800/90 rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-xl flex flex-col gap-6 transition-all duration-300 animate-fadeIn">
+            <div className="flex-grow theme-bg-card border theme-border rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-xl flex flex-col gap-6 transition-all duration-300 animate-fadeIn">
               <div>
-                <h2 className="text-xl font-extrabold text-white tracking-wide">Eagle Eye Quantitative Engine</h2>
-                <p className="text-xs text-slate-400 mt-1 font-mono">Macroeconomic Forecasting & Risk Modeling for Crypto Assets</p>
+                <h2 className="text-xl font-extrabold theme-text-primary tracking-wide">Eagle Eye Quantitative Engine</h2>
+                <p className="text-xs theme-text-secondary mt-1 font-mono">Macroeconomic Forecasting & Risk Modeling for Global Assets</p>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2">
                 {/* Support Band Doc */}
-                <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-5 hover:border-emerald-500/20 transition-all duration-300">
+                <div className="bg-slate-950/60 theme-bg-secondary/60 border theme-border rounded-xl p-5 hover:border-emerald-500/20 transition-all duration-300">
                   <div className="text-emerald-400 mb-3 flex items-center gap-2 font-bold font-mono">
                     <TrendingUp size={18} />
                     <span>BULL MARKET SUPPORT BAND</span>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  <p className="text-xs theme-text-secondary leading-relaxed mb-4">
                     The Bull Market Support Band represents a macro technical threshold computed using the convergence of the **20-Week Simple Moving Average (SMA)** and the **21-Week Exponential Moving Average (EMA)**.
                   </p>
-                  <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-center mb-4">
+                  <div className="bg-slate-900/60 border theme-border rounded-lg p-3 text-center mb-4">
                     <code className="text-emerald-400 font-mono text-xs">Band = [20W SMA, 21W EMA]</code>
                   </div>
-                  <ul className="text-[11px] text-slate-500 space-y-2 list-disc pl-4 font-mono">
+                  <ul className="text-[11px] theme-text-muted space-y-2 list-disc pl-4 font-mono">
                     <li>Prices trading consistently above indicate a macro bullish expansion phase.</li>
                     <li>Prices testing the band from above often signal critical support retests.</li>
                     <li>A clean weekly close below triggers a transition to a bear market regime.</li>
@@ -790,18 +1250,18 @@ export default function App() {
                 </div>
 
                 {/* Log Regression Doc */}
-                <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-5 hover:border-yellow-500/20 transition-all duration-300">
+                <div className="bg-slate-950/60 theme-bg-secondary/60 border theme-border rounded-xl p-5 hover:border-yellow-500/20 transition-all duration-300">
                   <div className="text-yellow-400 mb-3 flex items-center gap-2 font-bold font-mono">
                     <Layers size={18} />
                     <span>LOGARITHMIC REGRESSION</span>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  <p className="text-xs theme-text-secondary leading-relaxed mb-4">
                     Extrapolates long-term macroeconomic value by fitting historical daily closes against the elapsed time sequence from the genesis block anchor (January 3, 2009).
                   </p>
-                  <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-center mb-4">
+                  <div className="bg-slate-900/60 border theme-border rounded-lg p-3 text-center mb-4">
                     <code className="text-yellow-400 font-mono text-xs">log10(Price) = m · log10(Days) + c</code>
                   </div>
-                  <ul className="text-[11px] text-slate-500 space-y-2 list-disc pl-4 font-mono">
+                  <ul className="text-[11px] theme-text-muted space-y-2 list-disc pl-4 font-mono">
                     <li><strong>Fit Parameters:</strong> m = 5.80162, c = -17.1121.</li>
                     <li>Scales standard deviation channels to represent "Non-Bubble Fit" (undervalued consolidation) up to "Bubble Peak" (highly speculative cycles).</li>
                     <li>Compensates for diminishing returns and volatility decay over multiple cycles.</li>
@@ -809,20 +1269,20 @@ export default function App() {
                 </div>
 
                 {/* Risk Metric Doc */}
-                <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-5 hover:border-blue-500/20 transition-all duration-300">
+                <div className="bg-slate-950/60 theme-bg-secondary/60 border theme-border rounded-xl p-5 hover:border-blue-500/20 transition-all duration-300">
                   <div className="text-blue-400 mb-3 flex items-center gap-2 font-bold font-mono">
                     <Activity size={18} />
                     <span>QUANTITATIVE RISK SCORE</span>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  <p className="text-xs theme-text-secondary leading-relaxed mb-4">
                     Calculates a normalized score between **0.00 and 1.00** by evaluating the logarithmic position of the active spot price relative to the lower accumulation boundary and upper speculative peak.
                   </p>
-                  <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-center mb-4">
+                  <div className="bg-slate-900/60 border theme-border rounded-lg p-3 text-center mb-4">
                     <code className="text-blue-400 font-mono text-[10px] break-all">
                       Risk = (ln(P) - ln(Bottom)) / (ln(Peak) - ln(Bottom))
                     </code>
                   </div>
-                  <ul className="text-[11px] text-slate-500 space-y-2 list-disc pl-4 font-mono">
+                  <ul className="text-[11px] theme-text-muted space-y-2 list-disc pl-4 font-mono">
                     <li><strong>Risk &lt; 0.20 (Blue):</strong> Cycle bottoms and historical high-value accumulation windows.</li>
                     <li><strong>Risk 0.40 - 0.60 (Yellow):</strong> Neutral consolidation zone, typical in mid-cycle pauses.</li>
                     <li><strong>Risk &gt; 0.80 (Red):</strong> Extreme bubble extensions; signals optimal distribution windows.</li>
@@ -830,7 +1290,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="border-t border-slate-800/60 pt-6 mt-2 flex flex-col md:flex-row gap-4 items-center justify-between text-xs text-slate-400 font-mono">
+              <div className="border-t theme-border pt-6 mt-2 flex flex-col md:flex-row gap-4 items-center justify-between text-xs theme-text-secondary font-mono">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="text-amber-500" size={14} />
                   <span>Disclaimer: Not financial advice. Provided strictly for structural analysis.</span>
@@ -840,36 +1300,36 @@ export default function App() {
             </div>
           ) : (
             /* Chart Canvas Container */
-            <div className="flex-1 bg-[#080d19]/45 border border-slate-800/90 rounded-2xl p-4 md:p-5 min-h-[450px] flex flex-col justify-between backdrop-blur-md shadow-xl relative overflow-hidden transition-all duration-300">
+            <div className="flex-grow theme-bg-card border theme-border rounded-2xl p-4 md:p-5 min-h-[450px] flex flex-col justify-between backdrop-blur-md shadow-xl relative overflow-hidden transition-all duration-300">
               {loading && (
-                <div className="absolute inset-0 bg-[#060913]/90 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-50">
-                  <Loader2 className="animate-spin text-emerald-400" size={32} />
-                  <p className="text-[10px] font-mono tracking-widest text-emerald-400/80">
+                <div className="absolute inset-0 bg-[#060913]/90 theme-bg-primary/90 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-50">
+                  <Loader2 className="animate-spin theme-accent" size={32} />
+                  <p className="text-[10px] font-mono tracking-widest theme-accent">
                     CALCULATING MATHEMATICAL COORDINATES...
                   </p>
                 </div>
               )}
 
               {error && (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border border-dashed border-rose-900/40 bg-rose-950/5 rounded-xl m-4">
+                <div className="flex-grow flex flex-col items-center justify-center text-center p-6 border border-dashed border-rose-900/40 bg-rose-950/5 rounded-xl m-4">
                   <ShieldAlert className="text-rose-500 mb-2 animate-bounce" size={36} />
                   <h3 className="text-xs font-bold uppercase tracking-wider text-rose-200">
                     Data Pipeline Error
                   </h3>
-                  <p className="text-xs text-slate-400 mt-1">{error}</p>
+                  <p className="text-xs theme-text-secondary mt-1">{error}</p>
                 </div>
               )}
 
               {!loading && !error && (
-                <div className="w-full h-full min-h-0 min-w-0 flex-1 flex flex-col justify-between relative">
+                <div className="w-full h-full min-h-0 min-w-0 flex-grow flex flex-col justify-between relative">
                   {/* Top toolbar */}
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-6 z-20">
                     <div>
-                      <h2 className="text-sm font-bold text-white tracking-wide">
+                      <h2 className="text-sm font-bold theme-text-primary tracking-wide">
                         {getChartTitle()}
                       </h2>
-                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                        Ticker: <span className="text-amber-400 font-bold">BTC-USD</span> • Interval: <span className="text-slate-300">Weekly</span>
+                      <p className="text-[10px] theme-text-secondary font-mono mt-0.5">
+                        Ticker: <span className="theme-accent font-bold uppercase">{activeTab}</span> • Interval: <span className="theme-text-primary">Weekly</span>
                       </p>
                     </div>
 
@@ -877,44 +1337,52 @@ export default function App() {
                     <div className="flex flex-wrap items-center gap-2">
                       {/* Projection Controls (Visible on log regression only) */}
                       {activeTab === "log-regression" && (
-                        <div className="flex items-center gap-2 bg-slate-950/60 border border-slate-800/80 rounded-lg px-2.5 py-1">
-                          <span className="text-[9px] font-mono text-slate-400 font-bold uppercase">Forecast:</span>
+                        <div className="flex items-center gap-2 bg-slate-950/60 theme-bg-secondary border theme-border rounded-lg px-2.5 py-1">
+                          <span className="text-[9px] font-mono theme-text-secondary font-bold uppercase">Forecast:</span>
                           <select
                             value={projectionYears}
                             onChange={(e) => setProjectionYears(Number(e.target.value))}
-                            className="bg-transparent text-slate-200 text-xs font-mono font-bold border-none outline-none cursor-pointer focus:ring-0"
+                            className="bg-transparent theme-text-primary text-xs font-mono font-bold border-none outline-none cursor-pointer focus:ring-0"
                           >
-                            <option value={1} className="bg-[#0b0e1a]">1 Year</option>
-                            <option value={3} className="bg-[#0b0e1a]">3 Years</option>
-                            <option value={5} className="bg-[#0b0e1a]">5 Years</option>
-                            <option value={10} className="bg-[#0b0e1a]">10 Years</option>
+                            <option value={1} className="theme-bg-secondary">1 Year</option>
+                            <option value={3} className="theme-bg-secondary">3 Years</option>
+                            <option value={5} className="theme-bg-secondary">5 Years</option>
+                            <option value={10} className="theme-bg-secondary">10 Years</option>
                           </select>
                         </div>
                       )}
 
                       {/* Timeframe Preset Selectors */}
-                      <div className="flex items-center bg-slate-950/60 border border-slate-800/80 rounded-lg p-0.5">
+                      <div className="flex items-center bg-slate-950/60 theme-bg-secondary border theme-border rounded-lg p-0.5">
                         <button
                           onClick={() => setPresetZoom(1)}
-                          className="px-2.5 py-1 text-[9px] font-mono font-bold rounded text-slate-400 hover:text-white hover:bg-slate-800/40 transition-all"
+                          className={`px-2.5 py-1 text-[9px] font-mono font-bold rounded transition-all ${
+                            activeZoom === 1 ? "theme-accent bg-emerald-500/10" : "theme-text-secondary hover:theme-text-primary"
+                          }`}
                         >
                           1Y
                         </button>
                         <button
                           onClick={() => setPresetZoom(3)}
-                          className="px-2.5 py-1 text-[9px] font-mono font-bold rounded text-slate-400 hover:text-white hover:bg-slate-800/40 transition-all"
+                          className={`px-2.5 py-1 text-[9px] font-mono font-bold rounded transition-all ${
+                            activeZoom === 3 ? "theme-accent bg-emerald-500/10" : "theme-text-secondary hover:theme-text-primary"
+                          }`}
                         >
                           3Y
                         </button>
                         <button
                           onClick={() => setPresetZoom(5)}
-                          className="px-2.5 py-1 text-[9px] font-mono font-bold rounded text-slate-400 hover:text-white hover:bg-slate-800/40 transition-all"
+                          className={`px-2.5 py-1 text-[9px] font-mono font-bold rounded transition-all ${
+                            activeZoom === 5 ? "theme-accent bg-emerald-500/10" : "theme-text-secondary hover:theme-text-primary"
+                          }`}
                         >
                           5Y
                         </button>
                         <button
                           onClick={() => setPresetZoom("all")}
-                          className="px-2.5 py-1 text-[9px] font-mono font-bold rounded text-slate-400 hover:text-white hover:bg-slate-800/40 transition-all border-l border-slate-800/40"
+                          className={`px-2.5 py-1 text-[9px] font-mono font-bold rounded transition-all ${
+                            activeZoom === "all" ? "theme-accent bg-emerald-500/10" : "theme-text-secondary hover:theme-text-primary"
+                          }`}
                         >
                           MAX
                         </button>
@@ -922,7 +1390,7 @@ export default function App() {
 
                       <button
                         onClick={clearZoomSelection}
-                        className="flex items-center gap-1.5 bg-slate-950/80 hover:bg-slate-800 text-slate-300 hover:text-white text-[9px] font-mono font-bold px-3 py-1.5 rounded-lg border border-slate-800 shadow-lg transition-all"
+                        className="flex items-center gap-1.5 bg-slate-950/80 theme-bg-secondary hover:theme-bg-primary theme-text-primary text-[9px] font-mono font-bold px-3 py-1.5 rounded-lg border theme-border shadow-lg transition-all"
                       >
                         <RefreshCw size={10} /> Reset Zoom
                       </button>
@@ -930,7 +1398,7 @@ export default function App() {
                   </div>
 
                   {/* Chart Container */}
-                  <div className="flex-1 min-h-0 w-full relative">
+                  <div className="flex-grow min-h-0 w-full relative">
                     <ResponsiveContainer width="100%" height="100%">
                       {activeTab === "risk-metric" ? (
                         <ComposedChart
@@ -947,10 +1415,10 @@ export default function App() {
                               <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
                             </linearGradient>
                           </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.15} vertical={false} />
+                          <CartesianGrid strokeDasharray="3 3" stroke={currentThemeColors.grid} vertical={false} />
                           <XAxis
                             dataKey="date"
-                            stroke="#475569"
+                            stroke={currentThemeColors.text}
                             tickMargin={10}
                             fontSize={10}
                             axisLine={false}
@@ -959,7 +1427,7 @@ export default function App() {
                           />
                           <YAxis
                             yAxisId="price"
-                            stroke="#475569"
+                            stroke={currentThemeColors.text}
                             fontSize={10}
                             axisLine={false}
                             tickLine={false}
@@ -970,7 +1438,7 @@ export default function App() {
                           <YAxis
                             yAxisId="risk"
                             orientation="right"
-                            stroke="#475569"
+                            stroke={currentThemeColors.text}
                             fontSize={10}
                             axisLine={false}
                             tickLine={false}
@@ -979,8 +1447,8 @@ export default function App() {
                           />
                           <Tooltip
                             contentStyle={{
-                              backgroundColor: "#090d16",
-                              borderColor: "#1e293b",
+                              backgroundColor: currentThemeColors.tooltipBg,
+                              borderColor: currentThemeColors.tooltipBorder,
                               borderRadius: "12px",
                             }}
                             labelStyle={{
@@ -1011,7 +1479,7 @@ export default function App() {
                             type="monotone"
                             dataKey="risk"
                             name="Risk Metric"
-                            stroke="#3b82f6"
+                            stroke={currentThemeColors.secondaryLine}
                             strokeWidth={1.5}
                             fill="url(#riskGrad)"
                             dot={false}
@@ -1023,7 +1491,7 @@ export default function App() {
                             type="monotone"
                             dataKey="price"
                             name="Price"
-                            stroke="#475569"
+                            stroke={currentThemeColors.text}
                             strokeWidth={1.5}
                             dot={<CustomRiskDot />}
                             activeDot={{ r: 5 }}
@@ -1031,17 +1499,17 @@ export default function App() {
                           />
                         </ComposedChart>
                       ) : (
-                        <LineChart
+                        <ComposedChart
                           data={filteredData}
                           margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
                           onMouseDown={(e) => e && setRefAreaLeft(e.activeLabel)}
                           onMouseMove={(e) => refAreaLeft && e && setRefAreaRight(e.activeLabel)}
                           onMouseUp={handleZoomExecution}
                         >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.15} vertical={false} />
+                          <CartesianGrid strokeDasharray="3 3" stroke={currentThemeColors.grid} vertical={false} />
                           <XAxis
                             dataKey="date"
-                            stroke="#475569"
+                            stroke={currentThemeColors.text}
                             tickMargin={10}
                             fontSize={10}
                             axisLine={false}
@@ -1049,18 +1517,38 @@ export default function App() {
                             tickFormatter={formatXAxis}
                           />
                           <YAxis
-                            stroke="#475569"
+                            yAxisId="main"
+                            stroke={currentThemeColors.text}
                             fontSize={10}
                             axisLine={false}
                             tickLine={false}
                             scale={activeTab === "log-regression" ? "log" : "linear"}
                             domain={activeTab === "log-regression" ? [0.01, 1500000] : ["auto", "auto"]}
-                            tickFormatter={formatCurrency}
+                            tickFormatter={(v) => {
+                              if (activeCategory === "crypto") return formatCurrency(v);
+                              return formatMacroValue(v, activeTab);
+                            }}
                           />
+
+                          {/* Dual-axis YAxis for BTC price when tracking Macro or TradFi assets */}
+                          {activeCategory !== "crypto" && (
+                            <YAxis
+                              yAxisId="btc"
+                              orientation="right"
+                              stroke={currentThemeColors.priceLine}
+                              fontSize={10}
+                              axisLine={false}
+                              tickLine={false}
+                              scale="log"
+                              domain={[0.01, 1500000]}
+                              tickFormatter={formatCurrency}
+                            />
+                          )}
+
                           <Tooltip
                             contentStyle={{
-                              backgroundColor: "#090d16",
-                              borderColor: "#1e293b",
+                              backgroundColor: currentThemeColors.tooltipBg,
+                              borderColor: currentThemeColors.tooltipBorder,
                               borderRadius: "12px",
                             }}
                             labelStyle={{
@@ -1070,11 +1558,20 @@ export default function App() {
                               fontFamily: "monospace",
                             }}
                             itemStyle={{ fontSize: "12px", padding: "2px 0" }}
-                            formatter={(value, name) => [formatCurrency(value), name]}
+                            formatter={(value, name) => {
+                              if (name === "BTC price overlay" || name === "Spot Price" || name === "Price") {
+                                return [formatCurrency(value), name];
+                              }
+                              if (activeCategory === "crypto") {
+                                return [formatCurrency(value), name];
+                              }
+                              return [formatMacroValue(value, activeTab), name];
+                            }}
                           />
 
                           {refAreaLeft && refAreaRight && (
                             <ReferenceArea
+                              yAxisId="main"
                               x1={refAreaLeft}
                               x2={refAreaRight}
                               strokeOpacity={0.3}
@@ -1083,34 +1580,52 @@ export default function App() {
                             />
                           )}
 
+                          {/* --- DUAL AXIS BTC OVERLAY FOR MACRO & TRADFI --- */}
+                          {activeCategory !== "crypto" && (
+                            <Line
+                              yAxisId="btc"
+                              type="monotone"
+                              dataKey="btcPrice"
+                              name="BTC price overlay"
+                              stroke={currentThemeColors.priceLine}
+                              strokeWidth={1.5}
+                              strokeDasharray="4 4"
+                              dot={false}
+                              connectNulls
+                            />
+                          )}
+
                           {/* --- SUPPORT BANDS VIEW CHANNEL --- */}
                           {activeTab === "support-band" && (
                             <>
                               <Line
+                                yAxisId="main"
                                 type="monotone"
                                 dataKey="price"
                                 name="Spot Price"
-                                stroke="#f59e0b"
+                                stroke={currentThemeColors.priceLine}
                                 strokeWidth={2}
                                 dot={false}
                                 activeDot={{ r: 4 }}
                                 connectNulls
                               />
                               <Line
+                                yAxisId="main"
                                 type="monotone"
                                 dataKey="sma20"
                                 name="20-Week SMA"
-                                stroke="#10b981"
+                                stroke={currentThemeColors.primaryLine}
                                 strokeWidth={1.5}
                                 dot={false}
                                 strokeDasharray="4 4"
                                 connectNulls
                               />
                               <Line
+                                yAxisId="main"
                                 type="monotone"
                                 dataKey="ema21"
                                 name="21-Week EMA"
-                                stroke="#3b82f6"
+                                stroke={currentThemeColors.secondaryLine}
                                 strokeWidth={1.5}
                                 dot={false}
                                 connectNulls
@@ -1121,6 +1636,7 @@ export default function App() {
                           {/* --- REGRESSION CHANNELS VIEW CHANNEL --- */}
                           {activeTab === "log-regression" && visibility.bubbleUpper && (
                             <Line
+                              yAxisId="main"
                               type="monotone"
                               dataKey="bubbleUpper"
                               name="Bubble UpperBand"
@@ -1133,6 +1649,7 @@ export default function App() {
                           )}
                           {activeTab === "log-regression" && visibility.bubbleLower && (
                             <Line
+                              yAxisId="main"
                               type="monotone"
                               dataKey="bubbleLower"
                               name="Bubble LowerBand"
@@ -1145,6 +1662,7 @@ export default function App() {
                           )}
                           {activeTab === "log-regression" && visibility.nonBubbleUpper && (
                             <Line
+                              yAxisId="main"
                               type="monotone"
                               dataKey="nonBubbleUpper"
                               name="Non-Bubble Upper"
@@ -1157,10 +1675,11 @@ export default function App() {
                           )}
                           {activeTab === "log-regression" && visibility.nonBubbleFit && (
                             <Line
+                              yAxisId="main"
                               type="monotone"
                               dataKey="nonBubbleFit"
                               name="Non-Bubble Fit"
-                              stroke="#10b981"
+                              stroke={currentThemeColors.primaryLine}
                               strokeWidth={1.8}
                               strokeDasharray="4 4"
                               dot={false}
@@ -1169,10 +1688,11 @@ export default function App() {
                           )}
                           {activeTab === "log-regression" && visibility.nonBubbleLower && (
                             <Line
+                              yAxisId="main"
                               type="monotone"
                               dataKey="nonBubbleLower"
                               name="Non-Bubble Lower"
-                              stroke="#3b82f6"
+                              stroke={currentThemeColors.secondaryLine}
                               strokeWidth={1.2}
                               strokeOpacity={0.7}
                               dot={false}
@@ -1181,26 +1701,41 @@ export default function App() {
                           )}
                           {activeTab === "log-regression" && visibility.price && (
                             <Line
+                              yAxisId="main"
                               type="monotone"
                               dataKey="price"
                               name="Price"
-                              stroke="#f59e0b"
+                              stroke={currentThemeColors.priceLine}
                               strokeWidth={2.5}
                               dot={false}
                               connectNulls={true}
                             />
                           )}
-                        </LineChart>
+
+                          {/* --- MACRO / TRADFI GENERAL LINE PLOTS --- */}
+                          {["dxy", "cpi", "fed-rate", "spx", "gold", "us10y"].includes(activeTab) && (
+                            <Line
+                              yAxisId="main"
+                              type="monotone"
+                              dataKey="price"
+                              name={getChartTitle().split(":")[0]}
+                              stroke={currentThemeColors.primaryLine}
+                              strokeWidth={2.5}
+                              dot={false}
+                              connectNulls
+                            />
+                          )}
+                        </ComposedChart>
                       )}
                     </ResponsiveContainer>
                   </div>
 
                   {/* Toggle Controls for Log Regression */}
                   {activeTab === "log-regression" && (
-                    <div className="flex flex-wrap justify-center items-center gap-2 mt-4 border-t border-slate-800/40 pt-3 flex-shrink-0 z-20">
+                    <div className="flex flex-wrap justify-center items-center gap-2 mt-4 border-t theme-border pt-3 flex-shrink-0 z-20">
                       <button
                         onClick={handleToggleAllChannels}
-                        className="text-[9px] font-mono font-bold px-2.5 py-1.5 rounded-lg border bg-slate-950/80 hover:bg-slate-800 border-slate-800 text-slate-300 transition-all"
+                        className="text-[9px] font-mono font-bold px-2.5 py-1.5 rounded-lg border theme-border bg-[#090d19]/80 hover:bg-slate-800 text-slate-300 transition-all font-mono"
                       >
                         Show/Hide all
                       </button>

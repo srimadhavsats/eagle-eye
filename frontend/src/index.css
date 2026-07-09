@@ -1,15 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
+
+:root {
+  /* Slate Cyber (Default Dark) */
+  --bg-primary: #05070e;
+  --bg-secondary: #070a14;
+  --bg-panel: rgba(9, 13, 25, 0.8);
+  --bg-card: rgba(8, 13, 25, 0.45);
+  --border-color: rgba(30, 41, 59, 0.6);
+  --border-glow: rgba(16, 185, 129, 0.25);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-color: #10b981;
+  --accent-glow: rgba(16, 185, 129, 0.15);
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --chart-grid: rgba(30, 41, 59, 0.15);
+  --accent-spot: #f59e0b;
+  --accent-spot-glow: rgba(245, 158, 11, 0.1);
+  --scrollbar-track: #080c1d;
+  --scrollbar-thumb: #1e293b;
+  --scrollbar-thumb-hover: #10b981;
+}
+
+.theme-light {
+  /* Light Terminal (Modern Light) */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-panel: rgba(241, 245, 249, 0.95);
+  --bg-card: #ffffff;
+  --border-color: rgba(203, 213, 225, 0.8);
+  --border-glow: rgba(37, 99, 235, 0.2);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --accent-color: #2563eb;
+  --accent-glow: rgba(37, 99, 235, 0.1);
+  --shadow-color: rgba(15, 23, 42, 0.05);
+  --chart-grid: rgba(226, 232, 240, 0.5);
+  --accent-spot: #ea580c;
+  --accent-spot-glow: rgba(234, 88, 12, 0.1);
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #2563eb;
+}
+
+.theme-cyberpunk {
+  /* Neon Horizon (Cyberpunk) */
+  --bg-primary: #120124;
+  --bg-secondary: #1d023b;
+  --bg-panel: rgba(29, 2, 59, 0.85);
+  --bg-card: rgba(29, 2, 59, 0.6);
+  --border-color: rgba(244, 63, 94, 0.5);
+  --border-glow: rgba(234, 179, 8, 0.4);
+  --text-primary: #00ffff;
+  --text-secondary: #f43f5e;
+  --text-muted: #d946ef;
+  --accent-color: #eab308;
+  --accent-glow: rgba(234, 179, 8, 0.2);
+  --shadow-color: rgba(244, 63, 94, 0.2);
+  --chart-grid: rgba(244, 63, 94, 0.2);
+  --accent-spot: #f43f5e;
+  --accent-spot-glow: rgba(244, 63, 94, 0.15);
+  --scrollbar-track: #120124;
+  --scrollbar-thumb: #f43f5e;
+  --scrollbar-thumb-hover: #00ffff;
+}
 
 body {
   margin: 0;
-  background-color: #040711;
-  color: #f8fafc;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 code, .font-mono {
   font-family: 'JetBrains Mono', monospace;
+}
+
+.font-title {
+  font-family: 'Outfit', sans-serif;
 }
 
 /* Custom Scrollbar */
@@ -19,16 +91,17 @@ code, .font-mono {
 }
 
 ::-webkit-scrollbar-track {
-  background: #080c1d;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
+  transition: background 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #10b981;
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Glowing animations */
@@ -45,3 +118,37 @@ code, .font-mono {
   animation: neonGlow 4s infinite alternate;
 }
 
+/* Custom Theme helper utility classes */
+.theme-bg-primary {
+  background-color: var(--bg-primary);
+}
+.theme-bg-secondary {
+  background-color: var(--bg-secondary);
+}
+.theme-bg-panel {
+  background-color: var(--bg-panel);
+}
+.theme-bg-card {
+  background-color: var(--bg-card);
+}
+.theme-border {
+  border-color: var(--border-color);
+}
+.theme-border-glow {
+  border-color: var(--border-glow);
+}
+.theme-text-primary {
+  color: var(--text-primary);
+}
+.theme-text-secondary {
+  color: var(--text-secondary);
+}
+.theme-text-muted {
+  color: var(--text-muted);
+}
+.theme-accent {
+  color: var(--accent-color);
+}
+.theme-accent-bg {
+  background-color: var(--accent-color);
+}
