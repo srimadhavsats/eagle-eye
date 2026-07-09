@@ -26,6 +26,170 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
+// --- Client-side Calculations and Data Synchronization Helpers ---
+const GENESIS_TIME = new Date("2009-01-03T00:00:00Z").getTime();
+
+const getDaysSeq = (dateStr) => {
+  const date = new Date(dateStr + "T00:00:00Z");
+  const diffTime = date.getTime() - GENESIS_TIME;
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const getSundayOfDate = (d) => {
+  const date = new Date(d);
+  const day = date.getDay(); // 0 is Sunday, 1 is Monday, ...
+  const diff = date.getDate() - day + (day === 0 ? 0 : 7);
+  const sunday = new Date(date.setDate(diff));
+  return sunday.toISOString().split('T')[0];
+};
+
+const safeFloat = (val, decimals = 2) => {
+  if (val === null || val === undefined || isNaN(val)) return null;
+  const floatVal = parseFloat(val);
+  if (floatVal > 0 && Number(floatVal.toFixed(decimals)) === 0) {
+    return parseFloat(floatVal.toFixed(6));
+  }
+  return parseFloat(floatVal.toFixed(decimals));
+};
+
+const fetchBinanceDaily = async () => {
+  try {
+    const res = await fetch("https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=100");
+    if (!res.ok) throw new Error("Binance API error");
+    return await res.json();
+  } catch (e) {
+    console.warn("Binance live sync bypassed, using cached data:", e);
+    return [];
+  }
+};
+
+const mergeBinanceDaily = (historicalWeekly, dailyKlines) => {
+  const weeklyMap = new Map();
+  historicalWeekly.forEach(item => {
+    weeklyMap.set(item.date, item.close);
+  });
+
+  dailyKlines.forEach(k => {
+    const timestamp = k[0];
+    const closePrice = parseFloat(k[4]);
+    const dateStr = new Date(timestamp).toISOString().split('T')[0];
+    const sundayStr = getSundayOfDate(dateStr);
+    
+    weeklyMap.set(sundayStr, closePrice);
+  });
+
+  return Array.from(weeklyMap.entries())
+    .map(([date, close]) => ({ date, close }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+};
+
+const getLogRegression = (dfWeekly, projectionYears) => {
+  const data = dfWeekly.map(item => ({ ...item }));
+  if (data.length === 0) return [];
+  
+  const lastDate = new Date(data[data.length - 1].date);
+  const totalFutureWeeks = projectionYears * 52;
+  for (let i = 1; i <= totalFutureWeeks; i++) {
+    const futureDate = new Date(lastDate);
+    futureDate.setDate(lastDate.getDate() + i * 7);
+    const dateStr = futureDate.toISOString().split('T')[0];
+    data.push({ date: dateStr, close: null });
+  }
+
+  const m = 5.80162;
+  const c = -17.1121;
+
+  return data.map(row => {
+    const daysSeq = getDaysSeq(row.date);
+    const log10_x = Math.log10(daysSeq);
+    const base_fit = Math.pow(10, m * log10_x + c);
+
+    return {
+      date: row.date,
+      price: safeFloat(row.close),
+      nonBubbleLower: safeFloat(base_fit * 0.69819, 2),
+      nonBubbleFit: safeFloat(base_fit * 1.00000, 2),
+      nonBubbleUpper: safeFloat(base_fit * 1.21731, 2),
+      bubbleLower: safeFloat(base_fit * 1.67845, 2),
+      bubbleUpper: safeFloat(base_fit * 2.80932, 2)
+    };
+  });
+};
+
+const loadClientCalculations = async (projectionYears) => {
+  const weeklyRes = await fetch(`${import.meta.env.BASE_URL}data/bitcoin_weekly.json`);
+  if (!weeklyRes.ok) throw new Error("Could not load historical data file.");
+  const historicalWeekly = await weeklyRes.json();
+
+  const dailyKlines = await fetchBinanceDaily();
+  const mergedWeekly = mergeBinanceDaily(historicalWeekly, dailyKlines);
+
+  const windowSize = 20;
+  const smaValues = [];
+  for (let i = 0; i < mergedWeekly.length; i++) {
+    if (i < windowSize - 1) {
+      smaValues.push(null);
+    } else {
+      let sum = 0;
+      for (let j = 0; j < windowSize; j++) {
+        sum += mergedWeekly[i - j].close;
+      }
+      smaValues.push(sum / windowSize);
+    }
+  }
+
+  const emaSpan = 21;
+  const alpha = 2 / (emaSpan + 1);
+  const emaValues = [];
+  if (mergedWeekly.length > 0) {
+    let prevEma = mergedWeekly[0].close;
+    emaValues.push(prevEma);
+    for (let i = 1; i < mergedWeekly.length; i++) {
+      const curEma = mergedWeekly[i].close * alpha + prevEma * (1 - alpha);
+      emaValues.push(curEma);
+      prevEma = curEma;
+    }
+  }
+
+  const supportBandData = mergedWeekly.map((row, i) => ({
+    date: row.date,
+    price: safeFloat(row.close),
+    sma20: safeFloat(smaValues[i]),
+    ema21: safeFloat(emaValues[i])
+  }));
+
+  const riskMetricData = mergedWeekly.map(row => {
+    const daysSeq = getDaysSeq(row.date);
+    const log10_x = Math.log10(daysSeq);
+    const base_fit = Math.pow(10, 5.80162 * log10_x - 17.1121);
+    const lower_band = base_fit * 0.69819;
+    const upper_band = base_fit * 2.80932;
+    
+    let riskVal = 0;
+    if (row.close && lower_band && upper_band) {
+      const log_price = Math.log(row.close);
+      const log_bottom = Math.log(lower_band);
+      const log_peak = Math.log(upper_band);
+      riskVal = (log_price - log_bottom) / (log_peak - log_bottom);
+      riskVal = Math.max(0.0, Math.min(1.0, riskVal));
+    }
+
+    return {
+      date: row.date,
+      price: safeFloat(row.close),
+      risk: safeFloat(riskVal, 4)
+    };
+  });
+
+  const logRegressionData = getLogRegression(mergedWeekly, projectionYears);
+
+  return {
+    supportBand: supportBandData,
+    riskMetric: riskMetricData,
+    logRegression: logRegressionData
+  };
+};
+
 const getRiskColor = (risk) => {
   if (risk === null || risk === undefined) return "#64748b";
   if (risk < 0.2) return "#3b82f6"; // Cool Blue
@@ -88,17 +252,18 @@ export default function App() {
       setLoading(true);
       setError(null);
       try {
+        // Try local server first
         const [supportRes, logRes, riskRes] = await Promise.all([
           fetch("http://127.0.0.1:8000/api/support-band").then((r) => {
-            if (!r.ok) throw new Error("Support Band endpoint unreachable");
+            if (!r.ok) throw new Error("Local server error");
             return r.json();
           }),
           fetch(`http://127.0.0.1:8000/api/log-regression?projection_years=${projectionYears}`).then((r) => {
-            if (!r.ok) throw new Error("Log Regression endpoint unreachable");
+            if (!r.ok) throw new Error("Local server error");
             return r.json();
           }),
           fetch("http://127.0.0.1:8000/api/risk-metric").then((r) => {
-            if (!r.ok) throw new Error("Risk Metric endpoint unreachable");
+            if (!r.ok) throw new Error("Local server error");
             return r.json();
           }),
         ]);
@@ -111,7 +276,15 @@ export default function App() {
         setLogRegressionCache(logRes.data);
         setRiskMetricCache(riskRes.data);
       } catch (err) {
-        setError(err.message);
+        console.warn("Local API failed, switching to Serverless Client Mode:", err.message);
+        try {
+          const clientData = await loadClientCalculations(projectionYears);
+          setSupportBandCache(clientData.supportBand);
+          setLogRegressionCache(clientData.logRegression);
+          setRiskMetricCache(clientData.riskMetric);
+        } catch (clientErr) {
+          setError(`Data Pipeline Error: ${clientErr.message}`);
+        }
       } finally {
         setLoading(false);
       }
@@ -128,13 +301,18 @@ export default function App() {
         const res = await fetch(
           `http://127.0.0.1:8000/api/log-regression?projection_years=${projectionYears}`
         ).then((r) => {
-          if (!r.ok) throw new Error("Log Regression endpoint unreachable");
+          if (!r.ok) throw new Error("Local server error");
           return r.json();
         });
         if (res.status === "error") throw new Error(res.message);
         setLogRegressionCache(res.data);
       } catch (err) {
-        setError(err.message);
+        console.warn("Local API failed for regression forecast, calculating client-side:", err.message);
+        const regressionData = getLogRegression(
+          supportBandCache.map(row => ({ date: row.date, close: row.price })),
+          projectionYears
+        );
+        setLogRegressionCache(regressionData);
       }
     };
     fetchRegressionForecast();
