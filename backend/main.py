@@ -1,4 +1,5 @@
 import os
+import threading
 from datetime import datetime
 
 import numpy as np
@@ -35,48 +36,52 @@ def safe_float(val, decimals=2):
         return None
 
 
+db_lock = threading.Lock()
+
+
 def get_synchronized_dataset():
-    if not os.path.exists(CSV_PATH):
-        raise FileNotFoundError("Core static database sheet missing.")
-    df = pd.read_csv(CSV_PATH)
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.sort_values("date").reset_index(drop=True)
+    with db_lock:
+        if not os.path.exists(CSV_PATH):
+            raise FileNotFoundError("Core static database sheet missing.")
+        df = pd.read_csv(CSV_PATH)
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.sort_values("date").reset_index(drop=True)
 
-    last_cached_date = df["date"].max()
-    today_date = pd.to_datetime(datetime.utcnow().date())
-    days_delta = (today_date - last_cached_date).days
+        last_cached_date = df["date"].max()
+        today_date = pd.to_datetime(datetime.utcnow().date())
+        days_delta = (today_date - last_cached_date).days
 
-    if days_delta > 0:
-        url = "https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=7d"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        try:
-            res = requests.get(url, headers=headers, timeout=10)
-            res.raise_for_status()
-            json_data = res.json()["chart"]["result"][0]
-            timestamps = json_data["timestamp"]
-            ohlc = json_data["indicators"]["quote"][0]
+        if days_delta > 0:
+            url = "https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=7d"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            try:
+                res = requests.get(url, headers=headers, timeout=10)
+                res.raise_for_status()
+                json_data = res.json()["chart"]["result"][0]
+                timestamps = json_data["timestamp"]
+                ohlc = json_data["indicators"]["quote"][0]
 
-            patch_df = pd.DataFrame(
-                {
-                    "date": pd.to_datetime(timestamps, unit="s").strftime("%Y-%m-%d"),
-                    "open": ohlc["open"],
-                    "high": ohlc["high"],
-                    "low": ohlc["low"],
-                    "close": ohlc["close"],
-                }
-            )
-            patch_df["date"] = pd.to_datetime(patch_df["date"])
-            new_rows = patch_df[patch_df["date"] > last_cached_date].dropna().copy()
+                patch_df = pd.DataFrame(
+                    {
+                        "date": pd.to_datetime(timestamps, unit="s").strftime("%Y-%m-%d"),
+                        "open": ohlc["open"],
+                        "high": ohlc["high"],
+                        "low": ohlc["low"],
+                        "close": ohlc["close"],
+                    }
+                )
+                patch_df["date"] = pd.to_datetime(patch_df["date"])
+                new_rows = patch_df[patch_df["date"] > last_cached_date].dropna().copy()
 
-            if not new_rows.empty:
-                new_rows_csv = new_rows.copy()
-                new_rows_csv["date"] = new_rows_csv["date"].dt.strftime("%Y-%m-%d")
-                new_rows_csv.to_csv(CSV_PATH, mode="a", header=False, index=False)
-                df = pd.concat([df, new_rows], ignore_index=True)
-        except Exception as e:
-            print(f"[*] Live sync delta bypass: {str(e)}")
+                if not new_rows.empty:
+                    new_rows_csv = new_rows.copy()
+                    new_rows_csv["date"] = new_rows_csv["date"].dt.strftime("%Y-%m-%d")
+                    new_rows_csv.to_csv(CSV_PATH, mode="a", header=False, index=False)
+                    df = pd.concat([df, new_rows], ignore_index=True)
+            except Exception as e:
+                print(f"[*] Live sync delta bypass: {str(e)}")
 
-    return df
+        return df
 
 
 @app.get("/")

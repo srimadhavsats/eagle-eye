@@ -28,6 +28,8 @@ import {
   Sun,
   Moon,
   Zap,
+  Clock,
+  Calendar,
 } from "lucide-react";
 
 // --- Client-side Calculations and Data Synchronization Helpers ---
@@ -371,6 +373,39 @@ export default function App() {
   // Halving view states
   const [showHalvingLines, setShowHalvingLines] = useState(false);
 
+  // Halving countdown calculations
+  const targetHalvingDate = useMemo(() => new Date("2028-04-17T00:00:00Z"), []);
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const difference = targetHalvingDate.getTime() - Date.now();
+      if (difference <= 0) {
+        return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+      }
+      return {
+        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((difference / 1000 / 60) % 60),
+        seconds: Math.floor((difference / 1000) % 60),
+      };
+    };
+
+    setTimeLeft(calculateTimeLeft());
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [targetHalvingDate]);
+
+  // Block height estimation
+  const FOURTH_HALVING_TIME = new Date("2024-04-20T00:00:00Z").getTime();
+  const blocksSinceFourth = Math.floor((Date.now() - FOURTH_HALVING_TIME) / (1000 * 60 * 10)); // 10 mins per block
+  const currentBlockHeight = 840000 + blocksSinceFourth;
+  const blocksRemaining = 1050000 - currentBlockHeight;
+  const progressPercent = ((210000 - blocksRemaining) / 210000) * 100;
+
   // Projection lookahead control
   const [projectionYears, setProjectionYears] = useState(3);
 
@@ -670,13 +705,13 @@ export default function App() {
   const latestRegression = useMemo(() => logRegressionCache.length > 0 ? logRegressionCache[logRegressionCache.length - 1] : null, [logRegressionCache]);
 
   const currentPrice = useMemo(() => latestSupport?.price || latestRisk?.price || 0, [latestSupport, latestRisk]);
-  const lastSyncDateString = useMemo(() => latestSupport?.date
-    ? new Date(latestSupport.date).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "N/A", [latestSupport]);
+  const lastSyncDateString = useMemo(() => {
+    return new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, []);
 
   // Card 2: Support Band Calc
   const sma20 = latestSupport?.sma20 || 0;
@@ -1016,6 +1051,18 @@ export default function App() {
                         <Activity size={14} />
                         Risk Metric Chart
                       </button>
+
+                      <button
+                        onClick={() => handleTabClick("halving-countdown")}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                          activeTab === "halving-countdown"
+                            ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
+                            : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                        }`}
+                      >
+                        <Clock size={14} />
+                        Halving Countdown
+                      </button>
                     </div>
                   </div>
                 </>
@@ -1320,17 +1367,218 @@ export default function App() {
             )}
           </div>
 
-          {/* About Tab View */}
-          {activeTab === "about" ? (
-            <div className="flex-grow theme-bg-card border theme-border rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-xl flex flex-col gap-6 transition-all duration-300 animate-fadeIn">
-              <div>
+          {/* Halving Countdown Tab View */}
+          {activeTab === "halving-countdown" ? (
+            <div className="flex-grow theme-bg-card border theme-border rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-xl flex flex-col gap-6 transition-all duration-300 animate-fadeIn overflow-y-auto">
+              {/* Header Section */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b theme-border pb-6 shrink-0">
+                <div>
+                  <h2 className="text-xl font-extrabold theme-text-primary tracking-wider font-mono flex items-center gap-2">
+                    <Clock className="theme-accent text-emerald-400" size={20} />
+                    BITCOIN HALVING COUNTDOWN
+                  </h2>
+                  <p className="text-xs theme-text-secondary mt-1 font-mono">
+                    Real-time estimation of the 5th Bitcoin block reward halving event.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 bg-[#090d19]/80 theme-bg-secondary border theme-border px-3 py-1.5 rounded-lg font-mono text-[10px] self-start md:self-auto">
+                  <span className="theme-text-secondary font-bold">EST. DATE:</span>
+                  <span className="theme-accent text-emerald-400 font-bold">APRIL 17, 2028</span>
+                </div>
+              </div>
+
+              {/* Countdown Display Card */}
+              <div className="theme-bg-secondary border theme-border rounded-2xl p-6 md:p-8 text-center relative overflow-hidden shadow-inner flex flex-col items-center shrink-0">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+                
+                <span className="text-[10px] font-mono theme-text-muted tracking-widest uppercase mb-4">TIME REMAINING UNTIL REWARD CUT</span>
+                
+                {/* Massive Cyberpunk Countdown */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full max-w-2xl justify-center font-mono">
+                  {/* Days */}
+                  <div className="bg-[#090d19]/80 theme-bg-primary border theme-border rounded-xl p-4 flex flex-col items-center shadow-lg relative group overflow-hidden">
+                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-emerald">
+                      {String(timeLeft.days).padStart(3, "0")}
+                    </span>
+                    <span className="text-[9px] theme-text-muted font-bold tracking-widest uppercase mt-2">DAYS</span>
+                  </div>
+                  
+                  {/* Hours */}
+                  <div className="bg-[#090d19]/80 theme-bg-primary border theme-border rounded-xl p-4 flex flex-col items-center shadow-lg relative group overflow-hidden">
+                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-emerald">
+                      {String(timeLeft.hours).padStart(2, "0")}
+                    </span>
+                    <span className="text-[9px] theme-text-muted font-bold tracking-widest uppercase mt-2">HOURS</span>
+                  </div>
+                  
+                  {/* Minutes */}
+                  <div className="bg-[#090d19]/80 theme-bg-primary border theme-border rounded-xl p-4 flex flex-col items-center shadow-lg relative group overflow-hidden">
+                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-emerald">
+                      {String(timeLeft.minutes).padStart(2, "0")}
+                    </span>
+                    <span className="text-[9px] theme-text-muted font-bold tracking-widest uppercase mt-2">MINUTES</span>
+                  </div>
+                  
+                  {/* Seconds */}
+                  <div className="bg-[#090d19]/80 theme-bg-primary border theme-border rounded-xl p-4 flex flex-col items-center shadow-lg relative group overflow-hidden">
+                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-emerald">
+                      {String(timeLeft.seconds).padStart(2, "0")}
+                    </span>
+                    <span className="text-[9px] theme-text-muted font-bold tracking-widest uppercase mt-2">SECONDS</span>
+                  </div>
+                </div>
+
+                {/* Block Progress Bar */}
+                <div className="w-full max-w-2xl mt-8">
+                  <div className="flex justify-between text-[10px] font-mono theme-text-secondary mb-2">
+                    <span>BLOCK PROGRESS (4TH TO 5TH HALVING)</span>
+                    <span className="theme-text-primary font-bold">{progressPercent.toFixed(4)}%</span>
+                  </div>
+                  <div className="w-full bg-[#090d19]/80 theme-bg-primary border theme-border h-3.5 rounded-full overflow-hidden p-0.5 shadow-inner">
+                    <div 
+                      className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-1000 shadow-md relative"
+                      style={{ width: `${progressPercent}%` }}
+                    >
+                      <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.15)_50%,rgba(255,255,255,0.15)_75%,transparent_75%,transparent)] bg-[length:1rem_1rem] animate-[progress-bar-stripes_1s_linear_infinite]" />
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-[9px] font-mono theme-text-muted mt-2">
+                    <span>BLOCK 840,000</span>
+                    <span>EST. CURRENT BLOCK: {currentBlockHeight.toLocaleString()}</span>
+                    <span>BLOCK 1,050,000</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dual Grid Details */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 shrink-0">
+                {/* Block Statistics */}
+                <div className="theme-bg-secondary border theme-border rounded-xl p-5 font-mono">
+                  <h3 className="text-xs font-bold theme-text-primary border-b theme-border pb-3 mb-3 flex items-center gap-2">
+                    <Activity size={14} className="text-teal-400" />
+                    HALVING BLOCK STATISTICS
+                  </h3>
+                  <div className="space-y-3 text-xs">
+                    <div className="flex justify-between">
+                      <span className="theme-text-secondary">Current Block Height (Est.)</span>
+                      <span className="theme-text-primary font-bold">{currentBlockHeight.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between border-t theme-border pt-2.5">
+                      <span className="theme-text-secondary">Target Halving Block</span>
+                      <span className="theme-text-primary font-bold">1,050,000</span>
+                    </div>
+                    <div className="flex justify-between border-t theme-border pt-2.5">
+                      <span className="theme-text-secondary">Blocks Remaining</span>
+                      <span className="theme-accent text-emerald-400 font-bold">{blocksRemaining.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between border-t theme-border pt-2.5">
+                      <span className="theme-text-secondary">Time per Block (Avg)</span>
+                      <span className="theme-text-primary">10 Minutes</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Economic Shift / Impact */}
+                <div className="theme-bg-secondary border theme-border rounded-xl p-5 font-mono">
+                  <h3 className="text-xs font-bold theme-text-primary border-b theme-border pb-3 mb-3 flex items-center gap-2">
+                    <TrendingUp size={14} className="text-yellow-400" />
+                    SUPPLY & ISSUANCE SCHEDULE SHIFT
+                  </h3>
+                  <div className="space-y-3 text-xs">
+                    <div className="flex justify-between">
+                      <span className="theme-text-secondary">Block Subsidy Reward</span>
+                      <span className="theme-text-primary font-bold">3.125 BTC → 1.5625 BTC</span>
+                    </div>
+                    <div className="flex justify-between border-t theme-border pt-2.5">
+                      <span className="theme-text-secondary">Daily Issuance Rate</span>
+                      <span className="theme-text-primary font-bold">~450 BTC → ~225 BTC</span>
+                    </div>
+                    <div className="flex justify-between border-t theme-border pt-2.5">
+                      <span className="theme-text-secondary">Annual Supply Inflation</span>
+                      <span className="theme-accent text-emerald-400 font-bold">~0.83% → ~0.41%</span>
+                    </div>
+                    <div className="flex justify-between border-t theme-border pt-2.5">
+                      <span className="theme-text-secondary">Circulating Supply</span>
+                      <span className="theme-text-primary font-bold">~93.8% of 21M mined</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Halving History Table */}
+              <div className="theme-bg-secondary border theme-border rounded-xl p-5 shrink-0">
+                <h3 className="text-xs font-bold theme-text-primary border-b theme-border pb-3 mb-4 flex items-center gap-2 font-mono">
+                  <Layers size={14} className="text-emerald-400" />
+                  BITCOIN HALVING HISTORY
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px] font-mono text-left border-collapse">
+                    <thead>
+                      <tr className="theme-text-secondary border-b theme-border pb-2">
+                        <th className="py-2 pr-4 font-bold">EVENT</th>
+                        <th className="py-2 pr-4 font-bold">DATE</th>
+                        <th className="py-2 pr-4 font-bold">BLOCK</th>
+                        <th className="py-2 pr-4 font-bold">REWARD CHANGE</th>
+                        <th className="py-2 pr-4 font-bold">PRICE AT EVENT</th>
+                        <th className="py-2 font-bold text-right">POST-HALVING PEAK</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y theme-divide">
+                      <tr className="theme-text-secondary hover:theme-text-primary">
+                        <td className="py-3 pr-4 font-bold theme-text-primary">1st Halving</td>
+                        <td className="py-3 pr-4">Nov 28, 2012</td>
+                        <td className="py-3 pr-4">210,000</td>
+                        <td className="py-3 pr-4">50 → 25 BTC</td>
+                        <td className="py-3 pr-4 font-bold text-emerald-400">$12.35</td>
+                        <td className="py-3 text-right font-bold text-teal-400">$1,130 (9,000%)</td>
+                      </tr>
+                      <tr className="theme-text-secondary hover:theme-text-primary">
+                        <td className="py-3 pr-4 font-bold theme-text-primary">2nd Halving</td>
+                        <td className="py-3 pr-4">Jul 9, 2016</td>
+                        <td className="py-3 pr-4">420,000</td>
+                        <td className="py-3 pr-4">25 → 12.5 BTC</td>
+                        <td className="py-3 pr-4 font-bold text-emerald-400">$650</td>
+                        <td className="py-3 text-right font-bold text-teal-400">$19,640 (2,900%)</td>
+                      </tr>
+                      <tr className="theme-text-secondary hover:theme-text-primary">
+                        <td className="py-3 pr-4 font-bold theme-text-primary">3rd Halving</td>
+                        <td className="py-3 pr-4">May 11, 2020</td>
+                        <td className="py-3 pr-4">630,000</td>
+                        <td className="py-3 pr-4">12.5 → 6.25 BTC</td>
+                        <td className="py-3 pr-4 font-bold text-emerald-400">$8,820</td>
+                        <td className="py-3 text-right font-bold text-teal-400">$69,000 (680%)</td>
+                      </tr>
+                      <tr className="theme-text-secondary hover:theme-text-primary">
+                        <td className="py-3 pr-4 font-bold theme-text-primary">4th Halving</td>
+                        <td className="py-3 pr-4">Apr 20, 2024</td>
+                        <td className="py-3 pr-4">840,000</td>
+                        <td className="py-3 pr-4">6.25 → 3.125 BTC</td>
+                        <td className="py-3 pr-4 font-bold text-emerald-400">$63,900</td>
+                        <td className="py-3 text-right font-bold text-teal-400">Peak Pending</td>
+                      </tr>
+                      <tr className="theme-bg-secondary/40 font-bold">
+                        <td className="py-3 pr-4 theme-accent text-emerald-400">5th Halving</td>
+                        <td className="py-3 pr-4 theme-text-primary">Apr 2028 (Est.)</td>
+                        <td className="py-3 pr-4 theme-text-primary">1,050,000</td>
+                        <td className="py-3 pr-4 theme-text-primary">3.125 → 1.5625 BTC</td>
+                        <td className="py-3 pr-4 theme-text-muted">N/A</td>
+                        <td className="py-3 text-right text-emerald-400 glow-emerald">Projecting Cycle...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : activeTab === "about" ? (
+            <div className="flex-grow theme-bg-card border theme-border rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-xl flex flex-col gap-6 transition-all duration-300 animate-fadeIn overflow-y-auto">
+              <div className="shrink-0">
                 <h2 className="text-xl font-extrabold theme-text-primary tracking-wide">Eagle Eye Quantitative Engine</h2>
                 <p className="text-xs theme-text-secondary mt-1 font-mono">Macroeconomic Forecasting & Risk Modeling for Global Assets</p>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2 shrink-0">
                 {/* Support Band Doc */}
-                <div className="bg-slate-950/60 theme-bg-secondary/60 border theme-border rounded-xl p-5 hover:border-emerald-500/20 transition-all duration-300">
+                <div className="theme-bg-secondary border theme-border rounded-xl p-5 hover:border-emerald-500/20 transition-all duration-300">
                   <div className="text-emerald-400 mb-3 flex items-center gap-2 font-bold font-mono">
                     <TrendingUp size={18} />
                     <span>BULL MARKET SUPPORT BAND</span>
@@ -1349,7 +1597,7 @@ export default function App() {
                 </div>
 
                 {/* Log Regression Doc */}
-                <div className="bg-slate-950/60 theme-bg-secondary/60 border theme-border rounded-xl p-5 hover:border-yellow-500/20 transition-all duration-300">
+                <div className="theme-bg-secondary border theme-border rounded-xl p-5 hover:border-yellow-500/20 transition-all duration-300">
                   <div className="text-yellow-400 mb-3 flex items-center gap-2 font-bold font-mono">
                     <Layers size={18} />
                     <span>LOGARITHMIC REGRESSION</span>
@@ -1368,7 +1616,7 @@ export default function App() {
                 </div>
 
                 {/* Risk Metric Doc */}
-                <div className="bg-slate-950/60 theme-bg-secondary/60 border theme-border rounded-xl p-5 hover:border-blue-500/20 transition-all duration-300">
+                <div className="theme-bg-secondary border theme-border rounded-xl p-5 hover:border-blue-500/20 transition-all duration-300">
                   <div className="text-blue-400 mb-3 flex items-center gap-2 font-bold font-mono">
                     <Activity size={18} />
                     <span>QUANTITATIVE RISK SCORE</span>
@@ -1389,7 +1637,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="border-t theme-border pt-6 mt-2 flex flex-col md:flex-row gap-4 items-center justify-between text-xs theme-text-secondary font-mono">
+              <div className="border-t theme-border pt-6 mt-2 flex flex-col md:flex-row gap-4 items-center justify-between text-xs theme-text-secondary font-mono shrink-0">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="text-amber-500" size={14} />
                   <span>Disclaimer: Not financial advice. Provided strictly for structural analysis.</span>
