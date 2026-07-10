@@ -1397,7 +1397,7 @@ export default function App() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full max-w-2xl justify-center font-mono">
                   {/* Days */}
                   <div className="bg-[#090d19]/80 theme-bg-primary border theme-border rounded-xl p-4 flex flex-col items-center shadow-lg relative group overflow-hidden">
-                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-emerald">
+                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-text-emerald">
                       {String(timeLeft.days).padStart(3, "0")}
                     </span>
                     <span className="text-[9px] theme-text-muted font-bold tracking-widest uppercase mt-2">DAYS</span>
@@ -1405,7 +1405,7 @@ export default function App() {
                   
                   {/* Hours */}
                   <div className="bg-[#090d19]/80 theme-bg-primary border theme-border rounded-xl p-4 flex flex-col items-center shadow-lg relative group overflow-hidden">
-                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-emerald">
+                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-text-emerald">
                       {String(timeLeft.hours).padStart(2, "0")}
                     </span>
                     <span className="text-[9px] theme-text-muted font-bold tracking-widest uppercase mt-2">HOURS</span>
@@ -1413,7 +1413,7 @@ export default function App() {
                   
                   {/* Minutes */}
                   <div className="bg-[#090d19]/80 theme-bg-primary border theme-border rounded-xl p-4 flex flex-col items-center shadow-lg relative group overflow-hidden">
-                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-emerald">
+                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-text-emerald">
                       {String(timeLeft.minutes).padStart(2, "0")}
                     </span>
                     <span className="text-[9px] theme-text-muted font-bold tracking-widest uppercase mt-2">MINUTES</span>
@@ -1421,7 +1421,7 @@ export default function App() {
                   
                   {/* Seconds */}
                   <div className="bg-[#090d19]/80 theme-bg-primary border theme-border rounded-xl p-4 flex flex-col items-center shadow-lg relative group overflow-hidden">
-                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-emerald">
+                    <span className="text-3xl sm:text-4xl font-black text-emerald-400 theme-accent tracking-tight glow-text-emerald">
                       {String(timeLeft.seconds).padStart(2, "0")}
                     </span>
                     <span className="text-[9px] theme-text-muted font-bold tracking-widest uppercase mt-2">SECONDS</span>
@@ -1562,7 +1562,7 @@ export default function App() {
                         <td className="py-3 pr-4 theme-text-primary">1,050,000</td>
                         <td className="py-3 pr-4 theme-text-primary">3.125 → 1.5625 BTC</td>
                         <td className="py-3 pr-4 theme-text-muted">N/A</td>
-                        <td className="py-3 text-right text-emerald-400 glow-emerald">Projecting Cycle...</td>
+                        <td className="py-3 text-right text-emerald-400 glow-text-emerald">Projecting Cycle...</td>
                       </tr>
                     </tbody>
                   </table>
