@@ -10,6 +10,10 @@ An advanced quantitative analytics platform designed to model, visualize, and fo
 * **Composed Risk Metric Overlay**: Renders spot price curves color-coded by macro risk alongside a secondary Y-axis area chart illustrating normalized risk metrics (0.00 to 1.00) using custom gradient shading.
 * **Bull Market Support Band**: Dynamic weekly averages plotting the 20-Week Simple Moving Average (SMA) and 21-Week Exponential Moving Average (EMA) to identify cycle support thresholds.
 * **Logarithmic Regression Bands**: Extrapolates standard deviation bands from genesis to model diminishing returns and volatility decay over multiple cycles, featuring lookahead projection controls.
+* **Bitcoin Halving Countdown**: Renders a high-tech countdown timer estimating the 5th Bitcoin block reward halving event, coupled with an interactive progress bar showing current block height (from genesis/4th halving) and percentage completed towards block 1,050,000.
+* **Macroeconomic & TradFi Correlation Indices**: Incorporates a rich suite of external benchmarks—including the US Dollar Index (DXY), Inflation (CPI YoY %), Federal Funds Interest Rate, US 10-Year Treasury Yield, S&P 500 Equity Index, and Gold Spot Market—to evaluate macroeconomic correlations.
+* **Premium Multi-Theme Workspace**: Fully supports dynamic theme-switching with custom-tailored visual palettes: **Slate Cyber** (default neon dark), **Light Terminal** (clean light mode), and **Neon Horizon** (vibrant cyberpunk contrast).
+* **High-Fidelity Interactive Charts**: Built on top of Recharts, allowing mouse-drag area zoom-in, custom zoom preset selections (1Y, 3Y, 5Y, All), and toggle visibility for individual regression channels.
 * **Automated CI/CD Deployment**: Complete GitHub Actions workflow that executes security audits on the backend using `bandit` and compiles and deploys the frontend bundle directly to GitHub Pages.
 
 ---

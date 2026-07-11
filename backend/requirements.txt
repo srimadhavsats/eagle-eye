@@ -1,10 +1,17 @@
+# Core Quantitative Engine & Web Framework
 fastapi==0.136.1
 uvicorn==0.47.0
+pydantic==2.13.4
+
+# Data Processing & Numerical Analysis
 pandas==3.0.3
 numpy==2.4.6
 scipy==1.17.1
+
+# HTTP Client / Networking
 requests==2.34.2
-pydantic==2.13.4
+httpx==0.28.1
+
+# Development, Testing & Security Audit
 bandit==1.8.0
 pytest==8.3.4
-httpx==0.28.1
