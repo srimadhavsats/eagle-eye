@@ -183,3 +183,63 @@ def test_risk_metric_endpoint():
         assert "risk" in entry
         risk_val = entry["risk"]
         assert 0.0 <= risk_val <= 1.0
+
+
+def test_mempool_fees_endpoint():
+    """
+    Tests that /api/mempool-fees returns correct structure by mocking the Mempool.space responses.
+    """
+    def side_effect(url, *args, **kwargs):
+        resp = MagicMock()
+        resp.status_code = 200
+        if "fees/recommended" in url:
+            resp.json.return_value = {
+                "fastestFee": 15,
+                "halfHourFee": 12,
+                "hourFee": 10,
+                "economyFee": 5,
+                "minimumFee": 1
+            }
+        elif "mempool" in url:
+            resp.json.return_value = {
+                "count": 15000,
+                "vsize": 35000000,
+                "total_fee": 125000000
+            }
+        return resp
+        
+    with patch("requests.get", side_effect=side_effect):
+        response = client.get("/api/mempool-fees")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["recommended"]["fastestFee"] == 15
+        assert payload["mempool"]["count"] == 15000
+
+
+def test_mempool_fees_historical_endpoint():
+    """
+    Tests that /api/mempool-fees-historical returns mock block fee distributions.
+    """
+    mock_blocks = [
+        {
+            "timestamp": 1718000000,
+            "avgFee_90": 20,
+            "avgFee_50": 10,
+            "avgFee_10": 2
+        }
+    ]
+    
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = mock_blocks
+    
+    with patch("requests.get", return_value=mock_response):
+        response = client.get("/api/mempool-fees-historical?period=24h")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "success"
+        data = payload["data"]
+        assert len(data) == 1
+        assert data[0]["avgFee_50"] == 10
+
+

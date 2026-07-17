@@ -242,3 +242,43 @@ def get_risk_metric():
         return {"status": "success", "data": payload}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/mempool-fees")
+def get_mempool_fees():
+    try:
+        rec_url = "https://mempool.space/api/v1/fees/recommended"
+        rec_res = requests.get(rec_url, timeout=10)
+        rec_res.raise_for_status()
+        recommended = rec_res.json()
+
+        mem_url = "https://mempool.space/api/mempool"
+        mem_res = requests.get(mem_url, timeout=10)
+        mem_res.raise_for_status()
+        mempool = mem_res.json()
+
+        if "fee_histogram" in mempool:
+            mempool["fee_histogram"] = mempool["fee_histogram"][:5]
+
+        return {
+            "status": "success",
+            "recommended": recommended,
+            "mempool": mempool
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/mempool-fees-historical")
+def get_mempool_fees_historical(time_period: str = Query(default="24h")):
+    try:
+        if time_period not in ["24h", "1w", "1m"]:
+            time_period = "24h"
+        url = f"https://mempool.space/api/v1/mining/blocks/fee-rates/{time_period}"
+        res = requests.get(url, timeout=10)
+        res.raise_for_status()
+        data = res.json()
+        return {"status": "success", "data": data}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+

@@ -414,6 +414,13 @@ export default function App() {
   const [logRegressionCache, setLogRegressionCache] = useState([]);
   const [riskMetricCache, setRiskMetricCache] = useState([]);
 
+  // Bitcoin Transaction Fees States
+  const [mempoolFees, setMempoolFees] = useState(null);
+  const [mempoolHistorical, setMempoolHistorical] = useState([]);
+  const [feeTimePeriod, setFeeTimePeriod] = useState("24h");
+  const [feesLoading, setFeesLoading] = useState(false);
+  const [feesError, setFeesError] = useState(null);
+
   // Active chart states
   const [chartData, setChartData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
@@ -525,6 +532,73 @@ export default function App() {
     };
     fetchRegressionForecast();
   }, [projectionYears]);
+
+  // Fetch Bitcoin Mempool & Recommended Fees
+  useEffect(() => {
+    if (activeTab !== "btc-fees") return;
+
+    const fetchFeesData = async () => {
+      setFeesLoading(true);
+      setFeesError(null);
+      try {
+        const feeRes = await fetch("http://127.0.0.1:8000/api/mempool-fees").then((r) => {
+          if (!r.ok) throw new Error("Local server error");
+          return r.json();
+        });
+        if (feeRes.status === "error") throw new Error(feeRes.message);
+        setMempoolFees({
+          recommended: feeRes.recommended,
+          mempool: feeRes.mempool
+        });
+      } catch (err) {
+        console.warn("Local Fees API failed, switching to direct client fetch:", err.message);
+        try {
+          const [recRes, memRes] = await Promise.all([
+            fetch("https://mempool.space/api/v1/fees/recommended").then((r) => r.json()),
+            fetch("https://mempool.space/api/mempool").then((r) => r.json())
+          ]);
+          setMempoolFees({
+            recommended: recRes,
+            mempool: memRes
+          });
+        } catch (clientErr) {
+          setFeesError(`Fees Pipeline Error: ${clientErr.message}`);
+        }
+      } finally {
+        setFeesLoading(false);
+      }
+    };
+
+    fetchFeesData();
+    const interval = setInterval(fetchFeesData, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
+  // Fetch Bitcoin Historical Fee Rates
+  useEffect(() => {
+    if (activeTab !== "btc-fees") return;
+
+    const fetchHistoricalFees = async () => {
+      try {
+        const histRes = await fetch(`http://127.0.0.1:8000/api/mempool-fees-historical?time_period=${feeTimePeriod}`).then((r) => {
+          if (!r.ok) throw new Error("Local server error");
+          return r.json();
+        });
+        if (histRes.status === "error") throw new Error(histRes.message);
+        setMempoolHistorical(histRes.data);
+      } catch (err) {
+        console.warn("Local Historical Fees API failed, switching to direct client fetch:", err.message);
+        try {
+          const clientData = await fetch(`https://mempool.space/api/v1/mining/blocks/fee-rates/${feeTimePeriod}`).then((r) => r.json());
+          setMempoolHistorical(clientData);
+        } catch (clientErr) {
+          console.error("Direct historical fetch failed:", clientErr);
+        }
+      }
+    };
+
+    fetchHistoricalFees();
+  }, [activeTab, feeTimePeriod]);
 
   // 3. Keep active chart selection synchronized with cached states
   useEffect(() => {
@@ -1063,6 +1137,18 @@ export default function App() {
                         <Clock size={14} />
                         Halving Countdown
                       </button>
+
+                      <button
+                        onClick={() => handleTabClick("btc-fees")}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                          activeTab === "btc-fees"
+                            ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
+                            : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                        }`}
+                      >
+                        <Zap size={14} />
+                        Bitcoin Fee Tracker
+                      </button>
                     </div>
                   </div>
                 </>
@@ -1179,7 +1265,7 @@ export default function App() {
           
           {/* Top Intelligence Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {activeCategory === "crypto" && (
+            {activeCategory === "crypto" && activeTab !== "btc-fees" && (
               <>
                 {/* Card 1: Bitcoin Spot Price */}
                 <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm relative overflow-hidden transition-all duration-300 hover:theme-border-glow">
@@ -1241,6 +1327,84 @@ export default function App() {
                   <div className="mt-3 flex items-center justify-between border-t theme-border pt-2 text-[10px] font-mono theme-text-muted">
                     <span>BAND: <strong className="theme-text-secondary">LOG FIT</strong></span>
                     <span>SENTIMENT: <strong className="theme-text-secondary">MACRO</strong></span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeCategory === "crypto" && activeTab === "btc-fees" && (
+              <>
+                {/* Card 1: Bitcoin Spot Price */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm relative overflow-hidden transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">BTC SPOT PRICE</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {currentPrice ? formatCurrency(currentPrice) : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">ASSET: BTC-USD</span>
+                    <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">SPOT</span>
+                  </div>
+                </div>
+
+                {/* Card 2: Recommended Fastest Fee */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm relative overflow-hidden transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">FASTEST TRANSACTION FEE</span>
+                    <h3 className="text-xl font-extrabold text-emerald-400 mt-1 font-mono tracking-tight">
+                      {mempoolFees?.recommended ? `${mempoolFees.recommended.fastestFee} sat/vB` : "LOADING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3 border-t theme-border pt-2 text-[10px] font-mono theme-text-muted">
+                    <span>Est. Cost: <strong className="theme-text-primary">{mempoolFees?.recommended && currentPrice ? `$${((mempoolFees.recommended.fastestFee * 140) / 1e8 * currentPrice).toFixed(2)}` : "-"}</strong></span>
+                    <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">~10 MINS</span>
+                  </div>
+                </div>
+
+                {/* Card 3: Unconfirmed Transactions */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm relative overflow-hidden transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">UNCONFIRMED TRANSACTIONS</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {mempoolFees?.mempool ? mempoolFees.mempool.count.toLocaleString() : "LOADING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3 border-t theme-border pt-2 text-[10px] font-mono theme-text-secondary">
+                    <span>Pending in Mempool</span>
+                    <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">QUEUE</span>
+                  </div>
+                </div>
+
+                {/* Card 4: Mempool Congestion Level */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm relative overflow-hidden transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">CONGESTION LEVEL</span>
+                    <h3 className={`text-sm font-black mt-1.5 font-mono tracking-wide ${
+                      (() => {
+                        if (!mempoolFees?.mempool) return "text-slate-400";
+                        const blocks = Math.ceil(mempoolFees.mempool.vsize / 1e6);
+                        if (blocks < 3) return "text-emerald-400";
+                        if (blocks < 10) return "text-teal-400";
+                        if (blocks < 30) return "text-amber-400";
+                        if (blocks < 60) return "text-orange-400";
+                        return "text-rose-400";
+                      })()
+                    }`}>
+                      {(() => {
+                        if (!mempoolFees?.mempool) return "LOADING...";
+                        const blocks = Math.ceil(mempoolFees.mempool.vsize / 1e6);
+                        if (blocks < 3) return "MINIMAL CONGESTION";
+                        if (blocks < 10) return "LOW CONGESTION";
+                        if (blocks < 30) return "MODERATE CONGESTION";
+                        if (blocks < 60) return "HIGH CONGESTION";
+                        return "EXTREME CONGESTION";
+                      })()}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3 border-t theme-border pt-2 text-[10px] font-mono theme-text-muted">
+                    <span>Backlog: <strong className="theme-text-secondary">{mempoolFees?.mempool ? `${Math.ceil(mempoolFees.mempool.vsize / 1e6)} blocks` : "-"}</strong></span>
+                    <span className="text-[9px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">STATUS</span>
                   </div>
                 </div>
               </>
@@ -1367,8 +1531,389 @@ export default function App() {
             )}
           </div>
 
-          {/* Halving Countdown Tab View */}
-          {activeTab === "halving-countdown" ? (
+          {/* Bitcoin Fees Tracker Tab View */}
+          {activeTab === "btc-fees" ? (
+            <div className="flex-grow theme-bg-card border theme-border rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-xl flex flex-col gap-6 transition-all duration-300 animate-fadeIn overflow-y-auto">
+              
+              {/* Header Section */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b theme-border pb-6 shrink-0">
+                <div>
+                  <h2 className="text-xl font-extrabold theme-text-primary tracking-wider font-mono flex items-center gap-2">
+                    <Zap className="theme-accent text-emerald-400" size={20} />
+                    BITCOIN TRANSACTION FEE TRACKER
+                  </h2>
+                  <p className="text-xs theme-text-secondary mt-1 font-mono">
+                    Real-time fee rates, mempool statistics, and historical block fee rate trends.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 bg-[#090d19]/80 theme-bg-secondary border theme-border px-3 py-1.5 rounded-lg font-mono text-[10px] self-start md:self-auto">
+                  <span className="theme-text-secondary font-bold">REFRESH RATE:</span>
+                  <span className="theme-accent text-emerald-400 font-bold">30 SECONDS</span>
+                </div>
+              </div>
+
+              {feesLoading && !mempoolFees ? (
+                <div className="flex-grow flex flex-col items-center justify-center gap-3 py-12">
+                  <Loader2 className="animate-spin theme-accent text-emerald-400" size={32} />
+                  <p className="text-[10px] font-mono tracking-widest theme-accent">
+                    RETRIEVING MEMPOOL METRICS...
+                  </p>
+                </div>
+              ) : feesError && !mempoolFees ? (
+                <div className="flex-grow flex flex-col items-center justify-center text-center p-6 border border-dashed border-rose-900/40 bg-rose-950/5 rounded-xl py-12">
+                  <ShieldAlert className="text-rose-500 mb-2 animate-bounce" size={36} />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-rose-200">
+                    Network Error
+                  </h3>
+                  <p className="text-xs theme-text-secondary mt-1">{feesError}</p>
+                </div>
+              ) : (
+                <>
+                  {/* Grid 1: Recommended Priority Levels */}
+                  <div>
+                    <h3 className="text-xs font-bold theme-text-primary mb-3 font-mono tracking-wider flex items-center gap-1.5">
+                      <Clock size={12} className="text-emerald-400" />
+                      RECOMMENDED FEE RATES BY PRIORITY
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                      {/* High Priority */}
+                      <div className="bg-[#090d19]/60 theme-bg-secondary border border-emerald-500/20 rounded-xl p-4 flex flex-col justify-between shadow-md relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
+                        <div>
+                          <span className="text-[9px] font-bold font-mono text-emerald-400 uppercase">High Priority</span>
+                          <h4 className="text-2xl font-black theme-text-primary mt-1 font-mono">
+                            {mempoolFees?.recommended?.fastestFee || 0} <span className="text-xs text-slate-500 font-normal">sat/vB</span>
+                          </h4>
+                        </div>
+                        <div className="mt-4 border-t theme-border pt-2 text-[10px] font-mono">
+                          <div className="flex justify-between text-slate-500">
+                            <span>Time:</span>
+                            <span className="theme-text-primary font-semibold">~10 mins</span>
+                          </div>
+                          <div className="flex justify-between text-slate-500 mt-1">
+                            <span>Est. Cost:</span>
+                            <span className="text-emerald-400 font-bold">
+                              {currentPrice && mempoolFees?.recommended ? `$${((mempoolFees.recommended.fastestFee * 140) / 1e8 * currentPrice).toFixed(2)}` : "-"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Medium Priority */}
+                      <div className="bg-[#090d19]/60 theme-bg-secondary border theme-border rounded-xl p-4 flex flex-col justify-between shadow-md relative overflow-hidden">
+                        <div>
+                          <span className="text-[9px] font-bold font-mono text-teal-400 uppercase">Medium Priority</span>
+                          <h4 className="text-2xl font-black theme-text-primary mt-1 font-mono">
+                            {mempoolFees?.recommended?.halfHourFee || 0} <span className="text-xs text-slate-500 font-normal">sat/vB</span>
+                          </h4>
+                        </div>
+                        <div className="mt-4 border-t theme-border pt-2 text-[10px] font-mono">
+                          <div className="flex justify-between text-slate-500">
+                            <span>Time:</span>
+                            <span className="theme-text-primary font-semibold">~30 mins</span>
+                          </div>
+                          <div className="flex justify-between text-slate-500 mt-1">
+                            <span>Est. Cost:</span>
+                            <span className="theme-text-secondary font-bold">
+                              {currentPrice && mempoolFees?.recommended ? `$${((mempoolFees.recommended.halfHourFee * 140) / 1e8 * currentPrice).toFixed(2)}` : "-"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Low Priority */}
+                      <div className="bg-[#090d19]/60 theme-bg-secondary border theme-border rounded-xl p-4 flex flex-col justify-between shadow-md relative overflow-hidden">
+                        <div>
+                          <span className="text-[9px] font-bold font-mono text-amber-400 uppercase">Low Priority</span>
+                          <h4 className="text-2xl font-black theme-text-primary mt-1 font-mono">
+                            {mempoolFees?.recommended?.hourFee || 0} <span className="text-xs text-slate-500 font-normal">sat/vB</span>
+                          </h4>
+                        </div>
+                        <div className="mt-4 border-t theme-border pt-2 text-[10px] font-mono">
+                          <div className="flex justify-between text-slate-500">
+                            <span>Time:</span>
+                            <span className="theme-text-primary font-semibold">~60 mins</span>
+                          </div>
+                          <div className="flex justify-between text-slate-500 mt-1">
+                            <span>Est. Cost:</span>
+                            <span className="theme-text-secondary font-bold">
+                              {currentPrice && mempoolFees?.recommended ? `$${((mempoolFees.recommended.hourFee * 140) / 1e8 * currentPrice).toFixed(2)}` : "-"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Economy Priority */}
+                      <div className="bg-[#090d19]/60 theme-bg-secondary border theme-border rounded-xl p-4 flex flex-col justify-between shadow-md relative overflow-hidden">
+                        <div>
+                          <span className="text-[9px] font-bold font-mono text-slate-400 uppercase">No Priority</span>
+                          <h4 className="text-2xl font-black theme-text-primary mt-1 font-mono">
+                            {mempoolFees?.recommended?.economyFee || 0} <span className="text-xs text-slate-500 font-normal">sat/vB</span>
+                          </h4>
+                        </div>
+                        <div className="mt-4 border-t theme-border pt-2 text-[10px] font-mono">
+                          <div className="flex justify-between text-slate-500">
+                            <span>Time:</span>
+                            <span className="theme-text-primary font-semibold">Hours/Days</span>
+                          </div>
+                          <div className="flex justify-between text-slate-500 mt-1">
+                            <span>Est. Cost:</span>
+                            <span className="theme-text-secondary font-bold">
+                              {currentPrice && mempoolFees?.recommended ? `$${((mempoolFees.recommended.economyFee * 140) / 1e8 * currentPrice).toFixed(2)}` : "-"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Minimum Relay Fee */}
+                      <div className="bg-[#090d19]/60 theme-bg-secondary border theme-border rounded-xl p-4 flex flex-col justify-between shadow-md relative overflow-hidden">
+                        <div>
+                          <span className="text-[9px] font-bold font-mono text-slate-400 uppercase">Minimum Relay</span>
+                          <h4 className="text-2xl font-black theme-text-primary mt-1 font-mono">
+                            {mempoolFees?.recommended?.minimumFee || 0} <span className="text-xs text-slate-500 font-normal">sat/vB</span>
+                          </h4>
+                        </div>
+                        <div className="mt-4 border-t theme-border pt-2 text-[10px] font-mono">
+                          <div className="flex justify-between text-slate-500">
+                            <span>Time:</span>
+                            <span className="theme-text-primary font-semibold">Purge Limit</span>
+                          </div>
+                          <div className="flex justify-between text-slate-500 mt-1">
+                            <span>Est. Cost:</span>
+                            <span className="theme-text-secondary font-bold">
+                              {currentPrice && mempoolFees?.recommended ? `$${((mempoolFees.recommended.minimumFee * 140) / 1e8 * currentPrice).toFixed(2)}` : "-"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Grid 2: Mempool Congestion & Details */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-mono">
+                    <div className="theme-bg-secondary border theme-border rounded-xl p-5 lg:col-span-2 flex flex-col justify-between">
+                      <div>
+                        <h3 className="text-xs font-bold theme-text-primary border-b theme-border pb-3 mb-3 flex items-center gap-2">
+                          <Activity size={14} className="text-teal-400" />
+                          MEMPOOL CONGESTION DETAILS
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs mt-4">
+                          <div className="space-y-3">
+                            <div className="flex justify-between">
+                              <span className="theme-text-secondary">Unconfirmed Transactions</span>
+                              <span className="theme-text-primary font-bold">{mempoolFees?.mempool?.count?.toLocaleString() || 0} txs</span>
+                            </div>
+                            <div className="flex justify-between border-t theme-border pt-2.5">
+                              <span className="theme-text-secondary">Total Memory Usage (vsize)</span>
+                              <span className="theme-text-primary font-bold">
+                                {mempoolFees?.mempool ? `${(mempoolFees.mempool.vsize / 1e6).toFixed(2)} MB` : "0 MB"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="flex justify-between">
+                              <span className="theme-text-secondary">Backlog in Blocks</span>
+                              <span className="theme-accent text-emerald-400 font-bold">
+                                ~{mempoolFees?.mempool ? Math.ceil(mempoolFees.mempool.vsize / 1e6) : 0} blocks
+                              </span>
+                            </div>
+                            <div className="flex justify-between border-t theme-border pt-2.5">
+                              <span className="theme-text-secondary">Total Pending Fees</span>
+                              <span className="theme-text-primary font-bold">
+                                {mempoolFees?.mempool ? `${(mempoolFees.mempool.total_fee / 1e8).toFixed(4)} BTC` : "0 BTC"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Visual Progress bar */}
+                      <div className="w-full mt-6">
+                        <div className="flex justify-between text-[10px] theme-text-secondary mb-2">
+                          <span>MEMPOOL CAPACITY USED</span>
+                          <span className="theme-text-primary font-bold">
+                            {mempoolFees?.mempool ? Math.min(100, (mempoolFees.mempool.vsize / 30000000) * 100).toFixed(1) : 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-[#090d19]/80 theme-bg-primary border theme-border h-3.5 rounded-full overflow-hidden p-0.5 shadow-inner">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-1000 shadow-md ${
+                              (() => {
+                                if (!mempoolFees?.mempool) return "bg-slate-700";
+                                const blocks = Math.ceil(mempoolFees.mempool.vsize / 1e6);
+                                if (blocks < 3) return "bg-emerald-500";
+                                if (blocks < 10) return "bg-teal-500";
+                                if (blocks < 30) return "bg-amber-500";
+                                if (blocks < 60) return "bg-orange-500";
+                                return "bg-rose-500";
+                              })()
+                            }`}
+                            style={{ width: `${mempoolFees?.mempool ? Math.min(100, (mempoolFees.mempool.vsize / 30000000) * 100) : 0}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[9px] theme-text-muted mt-2">
+                          <span>Empty (0 MB)</span>
+                          <span>Target Capacity (300 MB)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="theme-bg-secondary border theme-border rounded-xl p-5">
+                      <h3 className="text-xs font-bold theme-text-primary border-b theme-border pb-3 mb-3 flex items-center gap-2">
+                        <Info size={14} className="text-yellow-400" />
+                        ESTIMATED TRANSFER COSTS
+                      </h3>
+                      <div className="space-y-3 text-xs mt-4">
+                        <p className="text-[10px] theme-text-muted leading-relaxed mb-2 font-mono">
+                          Calculated for standard single-signature transactions using recommended fast fee rates.
+                        </p>
+                        <div className="flex justify-between">
+                          <span className="theme-text-secondary">Taproot (110 vB)</span>
+                          <span className="theme-text-primary font-bold">
+                            {currentPrice && mempoolFees?.recommended ? `$${((mempoolFees.recommended.fastestFee * 110) / 1e8 * currentPrice).toFixed(2)}` : "-"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-t theme-border pt-2.5">
+                          <span className="theme-text-secondary">Native SegWit (140 vB)</span>
+                          <span className="theme-text-primary font-bold">
+                            {currentPrice && mempoolFees?.recommended ? `$${((mempoolFees.recommended.fastestFee * 140) / 1e8 * currentPrice).toFixed(2)}` : "-"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-t theme-border pt-2.5">
+                          <span className="theme-text-secondary">Nested SegWit (196 vB)</span>
+                          <span className="theme-text-primary font-bold">
+                            {currentPrice && mempoolFees?.recommended ? `$${((mempoolFees.recommended.fastestFee * 196) / 1e8 * currentPrice).toFixed(2)}` : "-"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-t theme-border pt-2.5">
+                          <span className="theme-text-secondary">Legacy (250 vB)</span>
+                          <span className="theme-text-primary font-bold">
+                            {currentPrice && mempoolFees?.recommended ? `$${((mempoolFees.recommended.fastestFee * 250) / 1e8 * currentPrice).toFixed(2)}` : "-"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Chart Container */}
+                  <div className="theme-bg-secondary border theme-border rounded-xl p-5 flex flex-col justify-between min-h-[350px] relative overflow-hidden">
+                    <div className="flex items-center justify-between gap-3 mb-6 z-20">
+                      <div>
+                        <h3 className="text-xs font-bold theme-text-primary font-mono tracking-wider flex items-center gap-1.5">
+                          <TrendingUp size={12} className="text-emerald-400" />
+                          HISTORICAL BLOCK FEE RATE TRENDS
+                        </h3>
+                        <p className="text-[10px] theme-text-secondary font-mono mt-0.5">
+                          Plots block fee-rate percentiles (in sat/vB) over time.
+                        </p>
+                      </div>
+                      <div className="flex items-center bg-slate-950/60 theme-bg-secondary border theme-border rounded-lg p-0.5">
+                        <button
+                          onClick={() => setFeeTimePeriod("24h")}
+                          className={`px-2.5 py-1 text-[9px] font-mono font-bold rounded transition-all ${
+                            feeTimePeriod === "24h" ? "theme-accent bg-emerald-500/10 text-emerald-400" : "theme-text-secondary hover:theme-text-primary"
+                          }`}
+                        >
+                          24H
+                        </button>
+                        <button
+                          onClick={() => setFeeTimePeriod("1w")}
+                          className={`px-2.5 py-1 text-[9px] font-mono font-bold rounded transition-all ${
+                            feeTimePeriod === "1w" ? "theme-accent bg-emerald-500/10 text-emerald-400" : "theme-text-secondary hover:theme-text-primary"
+                          }`}
+                        >
+                          1W
+                        </button>
+                        <button
+                          onClick={() => setFeeTimePeriod("1m")}
+                          className={`px-2.5 py-1 text-[9px] font-mono font-bold rounded transition-all ${
+                            feeTimePeriod === "1m" ? "theme-accent bg-emerald-500/10 text-emerald-400" : "theme-text-secondary hover:theme-text-primary"
+                          }`}
+                        >
+                          1M
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-grow h-[260px] w-full relative">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart
+                          data={mempoolHistorical}
+                          margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke={currentThemeColors.grid} vertical={false} />
+                          <XAxis
+                            dataKey="timestamp"
+                            stroke={currentThemeColors.text}
+                            tickMargin={10}
+                            fontSize={9}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(t) => {
+                              const d = new Date(t * 1000);
+                              return feeTimePeriod === "24h"
+                                ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                            }}
+                            minTickGap={40}
+                          />
+                          <YAxis
+                            stroke={currentThemeColors.text}
+                            fontSize={9}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(v) => `${v} sat`}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: currentThemeColors.tooltipBg,
+                              borderColor: currentThemeColors.tooltipBorder,
+                              borderRadius: "12px",
+                            }}
+                            labelStyle={{
+                              color: "#64748b",
+                              fontWeight: "bold",
+                              fontSize: "11px",
+                              fontFamily: "monospace",
+                            }}
+                            itemStyle={{ fontSize: "12px", padding: "2px 0" }}
+                            labelFormatter={(label) => {
+                              const d = new Date(label * 1000);
+                              return d.toLocaleString();
+                            }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="avgFee_90"
+                            name="High (90th Pct)"
+                            stroke="#ef4444"
+                            strokeWidth={1.5}
+                            dot={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="avgFee_50"
+                            name="Median (50th Pct)"
+                            stroke="#eab308"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="avgFee_10"
+                            name="Low (10th Pct)"
+                            stroke="#3b82f6"
+                            strokeWidth={1.5}
+                            dot={false}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : activeTab === "halving-countdown" ? (
             <div className="flex-grow theme-bg-card border theme-border rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-xl flex flex-col gap-6 transition-all duration-300 animate-fadeIn overflow-y-auto">
               {/* Header Section */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b theme-border pb-6 shrink-0">
