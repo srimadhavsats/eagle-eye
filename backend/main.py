@@ -282,3 +282,43 @@ def get_mempool_fees_historical(time_period: str = Query(default="24h")):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+
+@app.get("/api/on-chain-models")
+def get_on_chain_models():
+    try:
+        df_daily = get_synchronized_dataset()
+        actual_last_date = df_daily["date"].max()
+
+        df_weekly = (
+            df_daily.resample("W", on="date")
+            .last()
+            .reset_index()
+            .dropna(subset=["close"])
+            .copy()
+        )
+        if not df_weekly.empty:
+            df_weekly.iloc[-1, df_weekly.columns.get_loc("date")] = actual_last_date
+
+        df_weekly["sma_150"] = df_weekly["close"].rolling(window=21).mean()
+        df_weekly["std_150"] = df_weekly["close"].rolling(window=21).std()
+        df_weekly["sma_365"] = df_weekly["close"].rolling(window=52).mean()
+
+        df_weekly["mvrv_z"] = (df_weekly["close"] - df_weekly["sma_150"]) / df_weekly["std_150"]
+        df_weekly["nupl"] = (df_weekly["close"] - df_weekly["sma_150"]) / df_weekly["close"]
+        df_weekly["puell"] = df_weekly["close"] / df_weekly["sma_365"]
+
+        payload = []
+        for _, row in df_weekly.iterrows():
+            payload.append(
+                {
+                    "date": row["date"].strftime("%Y-%m-%d"),
+                    "price": safe_float(row["close"]),
+                    "mvrv_z": safe_float(row["mvrv_z"], decimals=4),
+                    "nupl": safe_float(row["nupl"], decimals=4),
+                    "puell": safe_float(row["puell"], decimals=4),
+                }
+            )
+        return {"status": "success", "data": payload}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+

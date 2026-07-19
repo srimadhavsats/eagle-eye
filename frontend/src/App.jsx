@@ -189,10 +189,38 @@ const loadClientCalculations = async (projectionYears) => {
 
   const logRegressionData = getLogRegression(mergedWeekly, projectionYears);
 
+  const onChainData = mergedWeekly.map((row, i) => {
+    let mvrv_z = null, nupl = null, puell = null;
+    if (i >= 20) {
+      let sum150 = 0;
+      for (let j=0; j<21; j++) sum150 += mergedWeekly[i-j].close;
+      const sma150 = sum150/21;
+      let varSum = 0;
+      for (let j=0; j<21; j++) varSum += Math.pow(mergedWeekly[i-j].close - sma150, 2);
+      const std150 = Math.sqrt(varSum/21);
+      mvrv_z = std150 > 0 ? (row.close - sma150) / std150 : 0;
+      nupl = row.close > 0 ? (row.close - sma150) / row.close : 0;
+    }
+    if (i >= 51) {
+      let sum365 = 0;
+      for (let j=0; j<52; j++) sum365 += mergedWeekly[i-j].close;
+      const sma365 = sum365/52;
+      puell = sma365 > 0 ? row.close / sma365 : 0;
+    }
+    return {
+      date: row.date,
+      price: safeFloat(row.close),
+      mvrv_z: safeFloat(mvrv_z, 4),
+      nupl: safeFloat(nupl, 4),
+      puell: safeFloat(puell, 4)
+    };
+  });
+
   return {
     supportBand: supportBandData,
     riskMetric: riskMetricData,
-    logRegression: logRegressionData
+    logRegression: logRegressionData,
+    onChainModels: onChainData
   };
 };
 
@@ -413,6 +441,7 @@ export default function App() {
   const [supportBandCache, setSupportBandCache] = useState([]);
   const [logRegressionCache, setLogRegressionCache] = useState([]);
   const [riskMetricCache, setRiskMetricCache] = useState([]);
+  const [onChainCache, setOnChainCache] = useState([]);
 
   // Bitcoin Transaction Fees States
   const [mempoolFees, setMempoolFees] = useState(null);
@@ -468,7 +497,7 @@ export default function App() {
       setError(null);
       try {
         // Try local server first
-        const [supportRes, logRes, riskRes] = await Promise.all([
+        const [supportRes, logRes, riskRes, onChainRes] = await Promise.all([
           fetch("http://127.0.0.1:8000/api/support-band").then((r) => {
             if (!r.ok) throw new Error("Local server error");
             return r.json();
@@ -481,15 +510,21 @@ export default function App() {
             if (!r.ok) throw new Error("Local server error");
             return r.json();
           }),
+          fetch("http://127.0.0.1:8000/api/on-chain-models").then((r) => {
+            if (!r.ok) throw new Error("Local server error");
+            return r.json();
+          }),
         ]);
 
         if (supportRes.status === "error") throw new Error(supportRes.message);
         if (logRes.status === "error") throw new Error(logRes.message);
         if (riskRes.status === "error") throw new Error(riskRes.message);
+        if (onChainRes.status === "error") throw new Error(onChainRes.message);
 
         setSupportBandCache(supportRes.data);
         setLogRegressionCache(logRes.data);
         setRiskMetricCache(riskRes.data);
+        setOnChainCache(onChainRes.data);
       } catch (err) {
         console.warn("Local API failed, switching to Serverless Client Mode:", err.message);
         try {
@@ -497,6 +532,7 @@ export default function App() {
           setSupportBandCache(clientData.supportBand);
           setLogRegressionCache(clientData.logRegression);
           setRiskMetricCache(clientData.riskMetric);
+          setOnChainCache(clientData.onChainModels);
         } catch (clientErr) {
           setError(`Data Pipeline Error: ${clientErr.message}`);
         }
@@ -609,6 +645,8 @@ export default function App() {
       activeData = logRegressionCache;
     } else if (activeTab === "risk-metric") {
       activeData = riskMetricCache;
+    } else if (["mvrv", "nupl", "puell"].includes(activeTab)) {
+      activeData = onChainCache;
     } else if (["dxy", "cpi", "fed-rate", "spx", "gold", "us10y"].includes(activeTab)) {
       activeData = generateMacroData(supportBandCache, activeTab);
     }
@@ -616,7 +654,7 @@ export default function App() {
     setChartData(activeData);
     setFilteredData(activeData);
     setActiveZoom("all");
-  }, [activeTab, supportBandCache, logRegressionCache, riskMetricCache]);
+  }, [activeTab, supportBandCache, logRegressionCache, riskMetricCache, onChainCache]);
 
   const formatCurrency = (val) => {
     if (!val) return "";
@@ -751,6 +789,12 @@ export default function App() {
       return "Commodity Standard: Gold Spot Price (XAU/USD) Chart";
     if (activeTab === "us10y")
       return "Sovereign Yields: United States 10-Year Treasury Yield Benchmark";
+    if (activeTab === "mvrv")
+      return "On-Chain Valuation: MVRV Z-Score (Market vs Realized Value)";
+    if (activeTab === "nupl")
+      return "On-Chain Valuation: Net Unrealized Profit/Loss (NUPL)";
+    if (activeTab === "puell")
+      return "On-Chain Valuation: Puell Multiple (Miner Revenue)";
     return "";
   };
 
@@ -762,6 +806,8 @@ export default function App() {
       setActiveTab("dxy");
     } else if (cat === "tradfi") {
       setActiveTab("spx");
+    } else if (cat === "on-chain") {
+      setActiveTab("mvrv");
     }
     if (window.innerWidth <= 768) {
       setIsSidebarOpen(false);
@@ -820,7 +866,6 @@ export default function App() {
 
   const supportStatus = supportCardDetails.status;
   const supportColor = supportCardDetails.color;
-  const supportBg = supportCardDetails.bg;
   const supportBorder = supportCardDetails.border;
 
   // Card 3: Risk Metric Calc
@@ -920,7 +965,6 @@ export default function App() {
 
   const regLabel = regressionCardDetails.label;
   const regColorClass = regressionCardDetails.colorClass;
-  const regBgClass = regressionCardDetails.bgClass;
   const regBorderClass = regressionCardDetails.borderClass;
 
   const dxyData = useMemo(() => generateMacroData(supportBandCache, "dxy"), [supportBandCache]);
@@ -935,6 +979,8 @@ export default function App() {
   const latestSpxObj = useMemo(() => spxData.length > 0 ? spxData[spxData.length - 1] : null, [spxData]);
   const goldData = useMemo(() => generateMacroData(supportBandCache, "gold"), [supportBandCache]);
   const latestGoldObj = useMemo(() => goldData.length > 0 ? goldData[goldData.length - 1] : null, [goldData]);
+
+  const latestOnChain = useMemo(() => onChainCache.length > 0 ? onChainCache[onChainCache.length - 1] : null, [onChainCache]);
 
   const currentThemeColors = chartColors[theme] || chartColors.dark;
 
@@ -1044,7 +1090,7 @@ export default function App() {
           {isSidebarOpen && (
             <>
               {/* Category selector */}
-              <div className="flex border-b theme-border pb-2.5 gap-4 text-xs font-bold theme-text-secondary">
+              <div className="flex border-b theme-border pb-2.5 gap-4 text-xs font-bold theme-text-secondary flex-wrap">
                 <span
                   onClick={() => handleCategoryChange("crypto")}
                   className={`${
@@ -1054,6 +1100,16 @@ export default function App() {
                   } flex items-center gap-1.5 transition-all duration-200`}
                 >
                   <Activity size={12} /> Crypto
+                </span>
+                <span
+                  onClick={() => handleCategoryChange("on-chain")}
+                  className={`${
+                    activeCategory === "on-chain"
+                      ? "theme-accent border-b-2 theme-border-glow pb-2.5 font-bold"
+                      : "hover:theme-text-primary cursor-pointer"
+                  } flex items-center gap-1.5 transition-all duration-200`}
+                >
+                  <Folder size={12} /> On-Chain
                 </span>
                 <span
                   onClick={() => handleCategoryChange("macro")}
@@ -1152,6 +1208,49 @@ export default function App() {
                     </div>
                   </div>
                 </>
+              )}
+
+              {activeCategory === "on-chain" && (
+                <div>
+                  <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Star size={10} className="text-amber-400 fill-amber-400" /> VALUATION MODELS
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      onClick={() => handleTabClick("mvrv")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "mvrv"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <Activity size={14} />
+                      MVRV Z-Score
+                    </button>
+                    <button
+                      onClick={() => handleTabClick("nupl")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "nupl"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <TrendingUp size={14} />
+                      Net Unrealized P/L
+                    </button>
+                    <button
+                      onClick={() => handleTabClick("puell")}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-300 flex items-center gap-2.5 ${
+                        activeTab === "puell"
+                          ? "bg-emerald-500/10 theme-accent border-l-2 theme-border-glow pl-2 shadow-[inset_4px_0_12px_rgba(16,185,129,0.05)]"
+                          : "theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary pl-3"
+                      }`}
+                    >
+                      <Layers size={14} />
+                      Puell Multiple
+                    </button>
+                  </div>
+                </div>
               )}
 
               {activeCategory === "macro" && (
@@ -1525,6 +1624,78 @@ export default function App() {
                   <div className="flex items-center justify-between mt-3">
                     <span className="text-[9px] theme-text-muted font-mono">RATIO: Equity/Metal</span>
                     <span className="text-[9px] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">RATIO</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeCategory === "on-chain" && (
+              <>
+                {/* Card 1: Bitcoin Spot Price */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm relative overflow-hidden transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">BTC SPOT PRICE</span>
+                    <h3 className="text-xl font-extrabold theme-text-primary mt-1 font-mono tracking-tight">
+                      {currentPrice ? formatCurrency(currentPrice) : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">ASSET: BTC-USD</span>
+                    <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border theme-border font-bold font-mono">SPOT</span>
+                  </div>
+                </div>
+
+                {/* Card 2: MVRV Z-Score */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">MVRV Z-SCORE</span>
+                    <h3 className={`text-xl font-extrabold mt-1 font-mono tracking-tight ${
+                      latestOnChain?.mvrv_z > 7 ? 'text-rose-400' : latestOnChain?.mvrv_z < 0.1 ? 'text-blue-400' : 'theme-text-primary'
+                    }`}>
+                      {latestOnChain ? latestOnChain.mvrv_z.toFixed(2) : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">Fair Value Deviation</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border theme-border font-bold font-mono ${
+                      latestOnChain?.mvrv_z > 7 ? 'text-rose-400 bg-rose-500/10' : latestOnChain?.mvrv_z < 0.1 ? 'text-blue-400 bg-blue-500/10' : 'text-emerald-400 bg-emerald-500/10'
+                    }`}>Z-SCORE</span>
+                  </div>
+                </div>
+
+                {/* Card 3: NUPL */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">NET UNREALIZED P/L</span>
+                    <h3 className={`text-xl font-extrabold mt-1 font-mono tracking-tight ${
+                      latestOnChain?.nupl > 0.75 ? 'text-orange-400' : latestOnChain?.nupl < 0 ? 'text-blue-400' : 'theme-text-primary'
+                    }`}>
+                      {latestOnChain ? latestOnChain.nupl.toFixed(2) : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">Market Profitability</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border theme-border font-bold font-mono ${
+                      latestOnChain?.nupl > 0.75 ? 'text-orange-400 bg-orange-500/10' : latestOnChain?.nupl < 0 ? 'text-blue-400 bg-blue-500/10' : 'text-teal-400 bg-teal-500/10'
+                    }`}>NUPL</span>
+                  </div>
+                </div>
+
+                {/* Card 4: Puell Multiple */}
+                <div className="theme-bg-card border theme-border rounded-xl p-4 flex flex-col justify-between backdrop-blur-md shadow-sm transition-all duration-300 hover:theme-border-glow">
+                  <div>
+                    <span className="text-[10px] font-mono theme-text-secondary font-bold uppercase tracking-wider">PUELL MULTIPLE</span>
+                    <h3 className={`text-xl font-extrabold mt-1 font-mono tracking-tight ${
+                      latestOnChain?.puell > 4 ? 'text-rose-400' : latestOnChain?.puell < 0.5 ? 'text-emerald-400' : 'theme-text-primary'
+                    }`}>
+                      {latestOnChain ? latestOnChain.puell.toFixed(2) : "SYNCHRONIZING..."}
+                    </h3>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[9px] theme-text-muted font-mono">Miner Revenue Multiple</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border theme-border font-bold font-mono ${
+                      latestOnChain?.puell > 4 ? 'text-rose-400 bg-rose-500/10' : latestOnChain?.puell < 0.5 ? 'text-emerald-400 bg-emerald-500/10' : 'text-yellow-400 bg-yellow-500/10'
+                    }`}>PUELL</span>
                   </div>
                 </div>
               </>
@@ -2665,6 +2836,44 @@ export default function App() {
                               type="monotone"
                               dataKey="price"
                               name={getChartTitle().split(":")[0]}
+                              stroke={currentThemeColors.primaryLine}
+                              strokeWidth={2.5}
+                              dot={false}
+                              connectNulls
+                            />
+                          )}
+
+                          {/* --- ON-CHAIN VALUATION MODELS --- */}
+                          {activeTab === "mvrv" && (
+                            <Line
+                              yAxisId="main"
+                              type="monotone"
+                              dataKey="mvrv_z"
+                              name="MVRV Z-Score"
+                              stroke={currentThemeColors.primaryLine}
+                              strokeWidth={2.5}
+                              dot={false}
+                              connectNulls
+                            />
+                          )}
+                          {activeTab === "nupl" && (
+                            <Line
+                              yAxisId="main"
+                              type="monotone"
+                              dataKey="nupl"
+                              name="Net Unrealized P/L"
+                              stroke={currentThemeColors.secondaryLine}
+                              strokeWidth={2.5}
+                              dot={false}
+                              connectNulls
+                            />
+                          )}
+                          {activeTab === "puell" && (
+                            <Line
+                              yAxisId="main"
+                              type="monotone"
+                              dataKey="puell"
+                              name="Puell Multiple"
                               stroke={currentThemeColors.primaryLine}
                               strokeWidth={2.5}
                               dot={false}
